@@ -1,0 +1,184 @@
+# ================================
+# AquaSmart Backend .gitignore
+# ================================
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go binaries
+main
+aquasmart_backend
+server
+/bin/
+/build/
+*.test
+*.prof
+
+# Test coverage
+*.out
+coverage.html
+coverage.txt
+
+# Go build cache
+.cache/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
+*.env
+
+# Configuration files with secrets
+config.yaml
+config.json
+*secret*
+*private*
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+logs/
+log/
+
+# Python virtual environment (for testing scripts)
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Node.js (if you add frontend later)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Documentation generated files
+docs/build/
+docs/_build/
+
+# API documentation
+api-docs/
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.cert
+ssl/
+certs/
+
+# Local development
+local/
+.local/
+
+# Performance and profiling
+*.pprof
+*.trace
+
+# Vendor directory (if using)
+vendor/
+
+# Air live reload tool
+tmp/
+
+# Go modules download cache
+go.sum.backup
+
+# Test data
+testdata/output/
+*.test.db
+
+# Editor backup files
+*~
+*.orig
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+Session.vim
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Custom project ignores
+# Add any project-specific files here
