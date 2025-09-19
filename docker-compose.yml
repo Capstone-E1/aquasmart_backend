@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: aquasmart_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aquasmart
+      POSTGRES_USER: aquasmart_user
+      POSTGRES_PASSWORD: aquasmart_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aquasmart_user -d aquasmart"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: pgAdmin for database management (web interface)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: aquasmart_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@aquasmart.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "8081:80"
+    depends_on:
+      - postgres
+    profiles:
+      - admin  # Only start when explicitly requested
+
+volumes:
+  postgres_data:
+    driver: local
