@@ -1,6 +1,7 @@
 # ================================
 # AquaSmart Backend .gitignore
 # ================================
+CLAUDE.md
 
 # Binaries for programs and plugins
 *.exe
