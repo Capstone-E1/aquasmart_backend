@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AquaSmart WebSocket Test Client</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .connecting { background-color: #fff3cd; color: #856404; }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #2980b9; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+
+        .sensor-data {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .sensor-card {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+        }
+
+        .device-id {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .sensor-value {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            padding: 5px;
+            background: white;
+            border-radius: 3px;
+        }
+
+        .value-good { border-left: 4px solid #28a745; }
+        .value-warning { border-left: 4px solid #ffc107; }
+        .value-danger { border-left: 4px solid #dc3545; }
+
+        .quality-status {
+            text-align: center;
+            padding: 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .quality-good { background-color: #d4edda; color: #155724; }
+        .quality-moderate { background-color: #fff3cd; color: #856404; }
+        .quality-poor { background-color: #f8d7da; color: #721c24; }
+
+        #messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: #f8f9fa;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .log-info { background-color: #e3f2fd; }
+        .log-sensor { background-color: #f3e5f5; }
+        .log-quality { background-color: #e8f5e8; }
+        .log-error { background-color: #ffebee; }
+
+        .timestamp {
+            color: #666;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌊 AquaSmart WebSocket Test Client</h1>
+
+        <div id="connection-status" class="status disconnected">
+            Disconnected
+        </div>
+
+        <button id="connect-btn" onclick="connect()">Connect</button>
+        <button id="disconnect-btn" onclick="disconnect()" disabled>Disconnect</button>
+        <button onclick="clearMessages()">Clear Messages</button>
+        <button onclick="requestLatestData()">Request Latest Data</button>
+    </div>
+
+    <div class="container">
+        <h2>📊 Real-time Sensor Data</h2>
+        <div id="sensor-data" class="sensor-data">
+            <div class="sensor-card">
+                <div style="text-align: center; color: #999; padding: 40px;">
+                    Waiting for sensor data...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📝 Message Log</h2>
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let isConnecting = false;
+        const sensorDevices = new Map();
+
+        function updateConnectionStatus(status, message) {
+            const statusEl = document.getElementById('connection-status');
+            const connectBtn = document.getElementById('connect-btn');
+            const disconnectBtn = document.getElementById('disconnect-btn');
+
+            statusEl.className = `status ${status}`;
+            statusEl.textContent = message;
+
+            switch(status) {
+                case 'connected':
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    break;
+                case 'disconnected':
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    break;
+                case 'connecting':
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = true;
+                    break;
+            }
+        }
+
+        function connect() {
+            if (isConnecting || (ws && ws.readyState === WebSocket.OPEN)) return;
+
+            isConnecting = true;
+            updateConnectionStatus('connecting', 'Connecting...');
+
+            const wsUrl = `ws://${window.location.hostname}:8080/ws`;
+            logMessage('info', `Connecting to ${wsUrl}`);
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function(event) {
+                isConnecting = false;
+                updateConnectionStatus('connected', 'Connected to AquaSmart Backend');
+                logMessage('info', 'WebSocket connection established');
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const message = JSON.parse(event.data);
+                    handleMessage(message);
+                } catch (error) {
+                    logMessage('error', `Failed to parse message: ${error.message}`);
+                }
+            };
+
+            ws.onclose = function(event) {
+                isConnecting = false;
+                updateConnectionStatus('disconnected', 'Disconnected');
+                logMessage('info', `Connection closed: ${event.code} ${event.reason}`);
+            };
+
+            ws.onerror = function(error) {
+                isConnecting = false;
+                updateConnectionStatus('disconnected', 'Connection Error');
+                logMessage('error', 'WebSocket error occurred');
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function handleMessage(message) {
+            const timestamp = new Date(message.timestamp).toLocaleTimeString();
+
+            switch(message.type) {
+                case 'connected':
+                    logMessage('info', 'Received welcome message');
+                    break;
+
+                case 'sensor_reading':
+                    logMessage('sensor', `Sensor data from ${message.data.device_id}: pH=${message.data.ph}, Turbidity=${message.data.turbidity}, TDS=${message.data.tds}`);
+                    updateSensorDisplay(message.data);
+                    break;
+
+                case 'water_quality_status':
+                    logMessage('quality', `Quality update for ${message.data.device_id}: ${message.data.overall_quality}`);
+                    updateQualityDisplay(message.data);
+                    break;
+
+                case 'error':
+                    logMessage('error', `Server error: ${message.data.error}`);
+                    break;
+
+                default:
+                    logMessage('info', `Unknown message type: ${message.type}`);
+            }
+        }
+
+        function updateSensorDisplay(sensorData) {
+            sensorDevices.set(sensorData.device_id, sensorData);
+            renderSensorData();
+        }
+
+        function updateQualityDisplay(qualityData) {
+            // Update the quality status in the sensor display
+            const device = sensorDevices.get(qualityData.device_id);
+            if (device) {
+                device.qualityStatus = qualityData;
+                renderSensorData();
+            }
+        }
+
+        function renderSensorData() {
+            const container = document.getElementById('sensor-data');
+
+            if (sensorDevices.size === 0) {
+                container.innerHTML = `
+                    <div class="sensor-card">
+                        <div style="text-align: center; color: #999; padding: 40px;">
+                            Waiting for sensor data...
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = '';
+
+            sensorDevices.forEach((device, deviceId) => {
+                const card = document.createElement('div');
+                card.className = 'sensor-card';
+
+                const phClass = getValueClass('ph', device.ph);
+                const turbidityClass = getValueClass('turbidity', device.turbidity);
+                const tdsClass = getValueClass('tds', device.tds);
+
+                const qualityClass = device.qualityStatus ?
+                    `quality-${device.qualityStatus.overall_quality}` : '';
+
+                card.innerHTML = `
+                    <div class="device-id">${deviceId}</div>
+                    <div class="sensor-value ${phClass}">
+                        <span>pH Level:</span>
+                        <span>${device.ph}</span>
+                    </div>
+                    <div class="sensor-value ${turbidityClass}">
+                        <span>Turbidity:</span>
+                        <span>${device.turbidity} NTU</span>
+                    </div>
+                    <div class="sensor-value ${tdsClass}">
+                        <span>TDS:</span>
+                        <span>${device.tds} ppm</span>
+                    </div>
+                    ${device.qualityStatus ? `
+                        <div class="quality-status ${qualityClass}">
+                            Water Quality: ${device.qualityStatus.overall_quality.toUpperCase()}
+                        </div>
+                    ` : ''}
+                    <div class="timestamp">
+                        Last updated: ${new Date(device.timestamp).toLocaleString()}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function getValueClass(type, value) {
+            switch(type) {
+                case 'ph':
+                    if (value >= 6.5 && value <= 8.5) return 'value-good';
+                    if (value >= 6.0 && value <= 9.0) return 'value-warning';
+                    return 'value-danger';
+                case 'turbidity':
+                    if (value <= 1.0) return 'value-good';
+                    if (value <= 4.0) return 'value-warning';
+                    return 'value-danger';
+                case 'tds':
+                    if (value <= 300) return 'value-good';
+                    if (value <= 500) return 'value-warning';
+                    return 'value-danger';
+                default:
+                    return 'value-good';
+            }
+        }
+
+        function logMessage(type, message) {
+            const messagesDiv = document.getElementById('messages');
+            const timestamp = new Date().toLocaleTimeString();
+
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+
+            messagesDiv.appendChild(logEntry);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        function requestLatestData() {
+            // Make HTTP request to get latest data
+            fetch('/api/v1/sensors/latest')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Object.values(data.data).forEach(reading => {
+                            updateSensorDisplay(reading);
+                        });
+                        logMessage('info', 'Loaded latest sensor data from API');
+                    }
+                })
+                .catch(error => {
+                    logMessage('error', `Failed to load latest data: ${error.message}`);
+                });
+        }
+
+        // Auto-connect on page load
+        window.onload = function() {
+            logMessage('info', 'AquaSmart WebSocket Test Client loaded');
+        };
+    </script>
+</body>
+</html>
