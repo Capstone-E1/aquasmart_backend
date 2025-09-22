@@ -108,8 +108,8 @@ func (s *SensorReading) ToWaterQualityStatus() WaterQualityStatus {
 	// Determine overall quality
 	overallQuality := "Good"
 	if phStatus != "Normal" || turbStatus == "Poor" || tdsStatus == "Poor" {
-		overallQuality = "Poor"
-	} else if turbStatus == "Good" || tdsStatus == "Fair" {
+		overallQuality = "Danger"
+	} else if (turbStatus == "Good" || tdsStatus == "Fair") && phStatus == "Normal" {
 		overallQuality = "Good"
 	} else if turbStatus == "Excellent" || tdsStatus == "Excellent" || phStatus == "Normal" {
 		overallQuality = "Excellent"
