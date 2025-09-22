@@ -64,12 +64,12 @@ func (s *SensorReading) ValidateReading() bool {
 // GetPhStatus returns the pH status based on water quality standards
 func (s *SensorReading) GetPhStatus() string {
 	switch {
-	case s.Ph < 6.5:
-		return "acidic"
-	case s.Ph > 8.5:
-		return "alkaline"
+	case s.Ph < 6.0:
+		return "Dangerously Acidic"
+	case s.Ph > 9.0:
+		return "Dangerously Alkaline"
 	default:
-		return "normal"
+		return "Normal"
 	}
 }
 
@@ -77,23 +77,25 @@ func (s *SensorReading) GetPhStatus() string {
 func (s *SensorReading) GetTurbidityStatus() string {
 	switch {
 	case s.Turbidity > 4.0:
-		return "high"
+		return "Poor"
 	case s.Turbidity > 1.0:
-		return "moderate"
+		return "Good"
 	default:
-		return "low"
+		return "Excellent"
 	}
 }
 
 // GetTDSStatus returns TDS status based on water quality standards
 func (s *SensorReading) GetTDSStatus() string {
 	switch {
-	case s.TDS > 500:
-		return "high"
-	case s.TDS > 300:
-		return "moderate"
+	case s.TDS > 900:
+		return "Poor"
+	case s.TDS < 900 && s.TDS > 600:
+		return "Fair"
+	case s.TDS < 600 && s.TDS > 300:
+		return "Good"
 	default:
-		return "low"
+		return "Excellent"
 	}
 }
 
@@ -104,11 +106,13 @@ func (s *SensorReading) ToWaterQualityStatus() WaterQualityStatus {
 	tdsStatus := s.GetTDSStatus()
 
 	// Determine overall quality
-	overallQuality := "good"
-	if phStatus != "normal" || turbStatus == "high" || tdsStatus == "high" {
-		overallQuality = "poor"
-	} else if turbStatus == "moderate" || tdsStatus == "moderate" {
-		overallQuality = "moderate"
+	overallQuality := "Good"
+	if phStatus != "Normal" || turbStatus == "Poor" || tdsStatus == "Poor" {
+		overallQuality = "Poor"
+	} else if turbStatus == "Good" || tdsStatus == "Fair" {
+		overallQuality = "Good"
+	} else if turbStatus == "Excellent" || tdsStatus == "Excellent" || phStatus == "Normal" {
+		overallQuality = "Excellent"
 	}
 
 	return WaterQualityStatus{
