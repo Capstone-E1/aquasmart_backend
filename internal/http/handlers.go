@@ -13,14 +13,14 @@ import (
 
 // Handlers contains all HTTP request handlers
 type Handlers struct {
-	store      *store.Store
+	store      store.DataStore
 	mqttClient *mqtt.Client
 }
 
 // NewHandlers creates a new handlers instance
-func NewHandlers(store *store.Store, mqttClient *mqtt.Client) *Handlers {
+func NewHandlers(dataStore store.DataStore, mqttClient *mqtt.Client) *Handlers {
 	return &Handlers{
-		store:      store,
+		store:      dataStore,
 		mqttClient: mqttClient,
 	}
 }
@@ -284,7 +284,8 @@ func (h *Handlers) sendErrorResponse(w http.ResponseWriter, message string, stat
 // SetFilterMode handles POST requests to set the water filter mode
 func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		Mode models.FilterMode `json:"mode"`
+		Mode  models.FilterMode `json:"mode"`
+		Force bool              `json:"force,omitempty"` // Optional: force mode change during filtration
 	}
 
 	// Parse request body
@@ -302,6 +303,55 @@ func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if filter mode change is allowed
+	canChange, reason := h.store.CanChangeFilterMode()
+	if !canChange && !request.Force {
+		// Get current filtration process details for error response
+		process, exists := h.store.GetFiltrationProcess()
+		if exists {
+			errorData := map[string]interface{}{
+				"error_code":           reason,
+				"current_state":        process.State,
+				"progress":             process.Progress,
+				"processed_volume":     process.ProcessedVolume,
+				"target_volume":        process.TargetVolume,
+				"estimated_completion": process.EstimatedCompletion,
+				"can_force":            process.CanInterrupt,
+				"status_message":       process.GetStatusMessage(),
+			}
+
+			response := APIResponse{
+				Success: false,
+				Message: "Cannot change filter mode",
+				Error:   reason,
+				Data:    errorData,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict) // 409 Conflict
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		h.sendErrorResponse(w, "Cannot change filter mode: "+reason, http.StatusConflict)
+		return
+	}
+
+	// If forced or process can be interrupted, handle the transition
+	if !canChange && request.Force {
+		// Check if current process can be interrupted
+		if process, exists := h.store.GetFiltrationProcess(); exists && !process.CanInterrupt {
+			h.sendErrorResponse(w, "Current filtration process cannot be interrupted", http.StatusConflict)
+			return
+		}
+
+		// Set process to switching state
+		if process, exists := h.store.GetFiltrationProcess(); exists {
+			process.State = models.FiltrationStateSwitching
+			h.store.SetFiltrationProcess(process)
+		}
+	}
+
 	// Update current filter mode in store
 	h.store.SetCurrentFilterMode(request.Mode)
 
@@ -311,15 +361,25 @@ func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Start new filtration process (default 50L, can be made configurable)
+	h.store.StartFiltrationProcess(request.Mode, 50.0)
+
 	// Return success response
+	responseData := map[string]interface{}{
+		"command":  filterCommand.Command,
+		"mode":     filterCommand.Mode,
+		"sent_at":  filterCommand.Timestamp,
+		"forced":   request.Force,
+	}
+
+	if request.Force {
+		responseData["message"] = "Filter mode changed (previous process interrupted)"
+	}
+
 	response := APIResponse{
 		Success: true,
 		Message: "Filter mode command sent successfully",
-		Data: map[string]interface{}{
-			"command": filterCommand.Command,
-			"mode":    filterCommand.Mode,
-			"sent_at": filterCommand.Timestamp,
-		},
+		Data:    responseData,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -335,9 +395,69 @@ func (h *Handlers) GetFilterStatus(w http.ResponseWriter, r *http.Request) {
 
 	status := models.NewFilterStatus(currentMode, hasData)
 
+	// Include filtration process info if available
+	if process, exists := h.store.GetFiltrationProcess(); exists {
+		status.FiltrationState = process.State
+		status.ProcessStartedAt = &process.StartedAt
+		status.EstimatedCompletion = &process.EstimatedCompletion
+	}
+
 	response := APIResponse{
 		Success: true,
 		Data:    status,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetFiltrationStatus handles GET requests to get detailed filtration process status
+func (h *Handlers) GetFiltrationStatus(w http.ResponseWriter, r *http.Request) {
+	process, exists := h.store.GetFiltrationProcess()
+	if !exists {
+		// No active filtration process
+		idleData := map[string]interface{}{
+			"state":           models.FiltrationStateIdle,
+			"can_change_mode": true,
+			"message":         "No active filtration process",
+		}
+
+		response := APIResponse{
+			Success: true,
+			Data:    idleData,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Calculate whether mode can be changed
+	canChange, reason := process.CanChangeMode()
+
+	// Prepare detailed response
+	responseData := map[string]interface{}{
+		"state":                process.State,
+		"current_mode":         process.CurrentMode,
+		"started_at":           process.StartedAt,
+		"last_updated":         process.LastUpdated,
+		"progress":             process.Progress,
+		"processed_volume":     process.ProcessedVolume,
+		"target_volume":        process.TargetVolume,
+		"current_flow_rate":    process.CurrentFlowRate,
+		"estimated_completion": process.EstimatedCompletion,
+		"can_change_mode":      canChange,
+		"can_interrupt":        process.CanInterrupt,
+		"status_message":       process.GetStatusMessage(),
+	}
+
+	if !canChange {
+		responseData["block_reason"] = reason
+	}
+
+	response := APIResponse{
+		Success: true,
+		Data:    responseData,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
