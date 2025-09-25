@@ -56,7 +56,6 @@ config.json
 *.db
 *.sqlite
 *.sqlite3
-.migrations/
 
 # Log files
 *.log
@@ -185,3 +184,24 @@ tramp
 
 # Custom project ignores
 # Add any project-specific files here
+
+# Test files and documentation
+test_filtration_workflow.go
+test_integration
+test_mqtt_filtration.py
+RUN_TESTS.md
+*_test_*.py
+*_test_*.go
+test_*.py
+test_*.go
+*.test.py
+*.test.go
+handlers_test.go
+sensor_test.go
+store_test.go
+
+# Test output files
+test_results/
+test_output/
+*.test.out
+*.test.log
