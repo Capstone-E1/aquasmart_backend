@@ -10,7 +10,7 @@ import (
 )
 
 // SetupRoutes configures all HTTP routes for the water purification API
-func SetupRoutes(store *store.Store, wsHub *ws.Hub, mqttClient *mqtt.Client) *chi.Mux {
+func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, mqttClient *mqtt.Client) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -30,7 +30,7 @@ func SetupRoutes(store *store.Store, wsHub *ws.Hub, mqttClient *mqtt.Client) *ch
 	}))
 
 	// Create handlers
-	handlers := NewHandlers(store, mqttClient)
+	handlers := NewHandlers(dataStore, mqttClient)
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
@@ -62,6 +62,11 @@ func SetupRoutes(store *store.Store, wsHub *ws.Hub, mqttClient *mqtt.Client) *ch
 		r.Route("/commands", func(r chi.Router) {
 			r.Post("/filter", handlers.SetFilterMode)
 			r.Get("/filter/status", handlers.GetFilterStatus)
+		})
+
+		// Filtration process monitoring routes
+		r.Route("/filtration", func(r chi.Router) {
+			r.Get("/status", handlers.GetFiltrationStatus)
 		})
 	})
 
