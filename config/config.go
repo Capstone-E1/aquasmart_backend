@@ -8,8 +8,9 @@ import (
 
 // Config holds all configuration for the water purification IoT backend
 type Config struct {
-	Server ServerConfig
-	MQTT   MQTTConfig
+	Server   ServerConfig
+	MQTT     MQTTConfig
+	Database DatabaseConfig
 }
 
 // ServerConfig holds HTTP server configuration
@@ -30,6 +31,16 @@ type MQTTConfig struct {
 	ConnectRetry bool
 }
 
+// DatabaseConfig holds PostgreSQL database configuration
+type DatabaseConfig struct {
+	Host     string
+	Port     string
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
+}
+
 // Load loads configuration from environment variables with defaults
 func Load() *Config {
 	return &Config{
@@ -46,6 +57,14 @@ func Load() *Config {
 			KeepAlive:    getDurationEnv("MQTT_KEEP_ALIVE", 30*time.Second),
 			PingTimeout:  getDurationEnv("MQTT_PING_TIMEOUT", 10*time.Second),
 			ConnectRetry: getBoolEnv("MQTT_CONNECT_RETRY", true),
+		},
+		Database: DatabaseConfig{
+			Host:     getEnv("DB_HOST", "localhost"),
+			Port:     getEnv("DB_PORT", "5432"),
+			User:     getEnv("DB_USER", "postgres"),
+			Password: getEnv("DB_PASSWORD", ""),
+			DBName:   getEnv("DB_NAME", "aquasmart"),
+			SSLMode:  getEnv("DB_SSLMODE", "require"),
 		},
 	}
 }
