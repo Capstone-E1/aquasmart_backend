@@ -160,6 +160,69 @@ func (h *Hub) BroadcastError(errorMsg string) {
 	}
 }
 
+// BroadcastFiltrationProgress broadcasts filtration process progress to all connected clients
+func (h *Hub) BroadcastFiltrationProgress(process *models.FiltrationProcess) {
+	// Create detailed progress data for frontend
+	progressData := map[string]interface{}{
+		"state":                process.State,
+		"current_mode":         process.CurrentMode,
+		"progress":             process.Progress,
+		"processed_volume":     process.ProcessedVolume,
+		"target_volume":        process.TargetVolume,
+		"current_flow_rate":    process.CurrentFlowRate,
+		"started_at":           process.StartedAt,
+		"estimated_completion": process.EstimatedCompletion,
+		"can_interrupt":        process.CanInterrupt,
+		"status_message":       process.GetStatusMessage(),
+	}
+
+	message := Message{
+		Type:      "filtration_progress",
+		Timestamp: time.Now(),
+		Data:      progressData,
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling filtration progress: %v", err)
+		return
+	}
+
+	select {
+	case h.broadcast <- data:
+	default:
+		log.Println("Broadcast channel is full, dropping filtration progress message")
+	}
+}
+
+// BroadcastModeChangeBlocked broadcasts when a mode change is blocked due to active filtration
+func (h *Hub) BroadcastModeChangeBlocked(reason string, process *models.FiltrationProcess) {
+	blockData := map[string]interface{}{
+		"reason":               reason,
+		"retry_after":          process.EstimatedCompletion,
+		"current_progress":     process.Progress,
+		"status_message":       process.GetStatusMessage(),
+	}
+
+	message := Message{
+		Type:      "mode_change_blocked",
+		Timestamp: time.Now(),
+		Data:      blockData,
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling mode change blocked message: %v", err)
+		return
+	}
+
+	select {
+	case h.broadcast <- data:
+	default:
+		log.Println("Broadcast channel is full, dropping mode change blocked message")
+	}
+}
+
 // GetConnectedClientsCount returns the number of connected clients
 func (h *Hub) GetConnectedClientsCount() int {
 	return len(h.clients)
