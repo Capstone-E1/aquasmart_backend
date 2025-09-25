@@ -189,6 +189,7 @@ tramp
 test_filtration_workflow.go
 test_integration
 test_mqtt_filtration.py
+test_mqtt_client.py
 RUN_TESTS.md
 *_test_*.py
 *_test_*.go
