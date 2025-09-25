@@ -15,6 +15,7 @@ type Store struct {
 	latestReading           *models.SensorReading           // Latest reading overall
 	latestByMode            map[models.FilterMode]*models.SensorReading // Latest reading per filter mode
 	currentFilterMode       models.FilterMode               // Current active filter mode
+	filtrationProcess       *models.FiltrationProcess       // Current filtration process state
 	maxReadings             int
 }
 
@@ -242,7 +243,7 @@ func (s *Store) GetAllWaterQualityStatus() []models.WaterQualityStatus {
 	defer s.mu.RUnlock()
 
 	var statuses []models.WaterQualityStatus
-	for mode, reading := range s.latestByMode {
+	for _, reading := range s.latestByMode {
 		if reading != nil {
 			status := reading.ToWaterQualityStatus()
 			statuses = append(statuses, status)
@@ -267,4 +268,89 @@ func (s *Store) ClearReadings() {
 
 	s.sensorReadings = make([]models.SensorReading, 0, s.maxReadings)
 	s.latestReading = nil
+}
+
+// === Filtration Process Methods ===
+
+// GetFiltrationProcess returns the current filtration process state
+func (s *Store) GetFiltrationProcess() (*models.FiltrationProcess, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.filtrationProcess == nil {
+		return nil, false
+	}
+
+	// Return a copy to avoid race conditions
+	processCopy := *s.filtrationProcess
+	return &processCopy, true
+}
+
+// SetFiltrationProcess sets the current filtration process state
+func (s *Store) SetFiltrationProcess(process *models.FiltrationProcess) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if process == nil {
+		s.filtrationProcess = nil
+		return
+	}
+
+	// Store a copy to avoid external modifications
+	processCopy := *process
+	s.filtrationProcess = &processCopy
+}
+
+// UpdateFiltrationProgress updates the current filtration progress with flow rate
+func (s *Store) UpdateFiltrationProgress(currentFlowRate float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.filtrationProcess == nil {
+		return
+	}
+
+	s.filtrationProcess.UpdateProgress(currentFlowRate)
+}
+
+// StartFiltrationProcess starts a new filtration process
+func (s *Store) StartFiltrationProcess(mode models.FilterMode, targetVolume float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.filtrationProcess = models.NewFiltrationProcess(mode, targetVolume)
+	s.currentFilterMode = mode
+}
+
+// CompleteFiltrationProcess marks the current filtration process as completed
+func (s *Store) CompleteFiltrationProcess() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.filtrationProcess != nil {
+		s.filtrationProcess.State = models.FiltrationStateCompleted
+		s.filtrationProcess.Progress = 100.0
+	}
+}
+
+// CanChangeFilterMode returns whether filter mode can be changed and the reason if not
+func (s *Store) CanChangeFilterMode() (bool, string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.filtrationProcess == nil {
+		return true, ""
+	}
+
+	return s.filtrationProcess.CanChangeMode()
+}
+
+// ClearCompletedProcess removes a completed filtration process
+func (s *Store) ClearCompletedProcess() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.filtrationProcess != nil && s.filtrationProcess.State == models.FiltrationStateCompleted {
+		s.filtrationProcess = nil
+	}
 }
