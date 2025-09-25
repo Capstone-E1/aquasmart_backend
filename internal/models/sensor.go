@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -64,9 +65,9 @@ func (s *SensorReading) ValidateReading() bool {
 // GetPhStatus returns the pH status based on water quality standards
 func (s *SensorReading) GetPhStatus() string {
 	switch {
-	case s.Ph < 6.0:
+	case s.Ph < 7.0:
 		return "Dangerously Acidic"
-	case s.Ph > 9.0:
+	case s.Ph > 8.5:
 		return "Dangerously Alkaline"
 	default:
 		return "Normal"
@@ -146,10 +147,44 @@ type FilterCommand struct {
 
 // FilterStatus represents the current status of the water filter
 type FilterStatus struct {
-	CurrentMode FilterMode `json:"current_mode"`
-	IsActive    bool       `json:"is_active"`
-	LastChanged time.Time  `json:"last_changed"`
-	Timestamp   time.Time  `json:"timestamp"`
+	CurrentMode        FilterMode        `json:"current_mode"`
+	IsActive           bool              `json:"is_active"`
+	LastChanged        time.Time         `json:"last_changed"`
+	Timestamp          time.Time         `json:"timestamp"`
+	FiltrationState    FiltrationState   `json:"filtration_state"`
+	ProcessStartedAt   *time.Time        `json:"process_started_at,omitempty"`
+	EstimatedCompletion *time.Time       `json:"estimated_completion,omitempty"`
+}
+
+// FiltrationState represents the current state of the filtration process
+type FiltrationState string
+
+const (
+	FiltrationStateIdle       FiltrationState = "idle"
+	FiltrationStateProcessing FiltrationState = "processing"
+	FiltrationStateCompleted  FiltrationState = "completed"
+	FiltrationStateSwitching  FiltrationState = "switching"
+)
+
+// FiltrationProcess represents the current filtration process details
+type FiltrationProcess struct {
+	State              FiltrationState   `json:"state"`
+	CurrentMode        FilterMode        `json:"current_mode"`
+	StartedAt          time.Time         `json:"started_at"`
+	LastUpdated        time.Time         `json:"last_updated"`
+
+	// Flow-based tracking (PRIMARY)
+	TargetVolume       float64           `json:"target_volume"`        // Total liters to filter
+	ProcessedVolume    float64           `json:"processed_volume"`     // Liters already processed
+	CurrentFlowRate    float64           `json:"current_flow_rate"`    // Current L/min from sensor
+
+	// Time-based estimation (SECONDARY)
+	EstimatedDuration  time.Duration     `json:"estimated_duration"`
+	EstimatedCompletion time.Time        `json:"estimated_completion"`
+
+	// Progress calculation
+	Progress           float64           `json:"progress"`              // 0-100%
+	CanInterrupt       bool              `json:"can_interrupt"`
 }
 
 // CommandResponse represents a response from the STM32 device
@@ -177,9 +212,118 @@ func NewFilterCommand(mode FilterMode) *FilterCommand {
 // NewFilterStatus creates a new filter status
 func NewFilterStatus(mode FilterMode, isActive bool) *FilterStatus {
 	return &FilterStatus{
-		CurrentMode: mode,
-		IsActive:    isActive,
-		LastChanged: time.Now(),
-		Timestamp:   time.Now(),
+		CurrentMode:     mode,
+		IsActive:        isActive,
+		LastChanged:     time.Now(),
+		Timestamp:       time.Now(),
+		FiltrationState: FiltrationStateIdle,
+	}
+}
+
+// NewFiltrationProcess creates a new filtration process
+func NewFiltrationProcess(mode FilterMode, targetVolume float64) *FiltrationProcess {
+	now := time.Now()
+	return &FiltrationProcess{
+		State:           FiltrationStateProcessing,
+		CurrentMode:     mode,
+		StartedAt:       now,
+		LastUpdated:     now,
+		TargetVolume:    targetVolume,
+		ProcessedVolume: 0.0,
+		CurrentFlowRate: 0.0,
+		Progress:        0.0,
+		CanInterrupt:    false, // Default: cannot interrupt during initial phase
+	}
+}
+
+// UpdateProgress calculates and updates the filtration progress
+func (fp *FiltrationProcess) UpdateProgress(currentFlowRate float64) {
+	fp.CurrentFlowRate = currentFlowRate
+	now := time.Now()
+
+	// Calculate volume processed since last update based on flow rate
+	if !fp.LastUpdated.IsZero() {
+		timeDelta := now.Sub(fp.LastUpdated).Minutes()
+		volumeDelta := currentFlowRate * timeDelta
+		fp.ProcessedVolume += volumeDelta
+	}
+
+	fp.LastUpdated = now
+
+	// Calculate progress (flow-based is primary)
+	if fp.TargetVolume > 0 {
+		fp.Progress = (fp.ProcessedVolume / fp.TargetVolume) * 100
+		if fp.Progress > 100 {
+			fp.Progress = 100
+		}
+
+		// Estimate completion time based on current flow rate
+		if currentFlowRate > 0 {
+			remainingVolume := fp.TargetVolume - fp.ProcessedVolume
+			if remainingVolume > 0 {
+				remainingMinutes := remainingVolume / currentFlowRate
+				fp.EstimatedCompletion = now.Add(time.Duration(remainingMinutes) * time.Minute)
+			} else {
+				fp.EstimatedCompletion = now // Completed
+			}
+		}
+	} else {
+		// Fallback: Time-based progress if volume not available
+		if fp.EstimatedDuration > 0 {
+			elapsed := now.Sub(fp.StartedAt)
+			fp.Progress = (elapsed.Seconds() / fp.EstimatedDuration.Seconds()) * 100
+			if fp.Progress > 100 {
+				fp.Progress = 100
+			}
+		}
+	}
+
+	// Mark as completed if progress reaches 100%
+	if fp.Progress >= 100 {
+		fp.State = FiltrationStateCompleted
+	}
+
+	// Allow interruption after 10% progress (configurable)
+	if fp.Progress >= 10 {
+		fp.CanInterrupt = true
+	}
+}
+
+// IsProcessingOrSwitching returns true if the filtration is in a state that blocks mode changes
+func (fp *FiltrationProcess) IsProcessingOrSwitching() bool {
+	return fp.State == FiltrationStateProcessing || fp.State == FiltrationStateSwitching
+}
+
+// CanChangeMode returns whether filter mode can be changed and the reason if not
+func (fp *FiltrationProcess) CanChangeMode() (bool, string) {
+	switch fp.State {
+	case FiltrationStateIdle, FiltrationStateCompleted:
+		return true, ""
+	case FiltrationStateProcessing:
+		if fp.CanInterrupt {
+			return true, "filtration_interruptible"
+		}
+		return false, "filtration_in_progress"
+	case FiltrationStateSwitching:
+		return false, "mode_change_in_progress"
+	default:
+		return false, "unknown_state"
+	}
+}
+
+// GetStatusMessage returns a human-readable status message
+func (fp *FiltrationProcess) GetStatusMessage() string {
+	switch fp.State {
+	case FiltrationStateIdle:
+		return "System is idle"
+	case FiltrationStateProcessing:
+		return fmt.Sprintf("Filtering %.1fL of %.1fL (%.1f%% complete)",
+			fp.ProcessedVolume, fp.TargetVolume, fp.Progress)
+	case FiltrationStateCompleted:
+		return "Filtration completed successfully"
+	case FiltrationStateSwitching:
+		return "Switching filter mode"
+	default:
+		return "Unknown status"
 	}
 }
