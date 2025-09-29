@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -120,6 +121,28 @@ func (c *Client) SubscribeToSensorData() error {
 	return nil
 }
 
+// extractDeviceIDFromTopic extracts device ID from MQTT topic
+// Expected formats:
+//   - aquasmart/sensors/{device_id}/data
+//   - aquasmart/sensors/data (fallback to "default")
+func (c *Client) extractDeviceIDFromTopic(topic string) string {
+	parts := strings.Split(topic, "/")
+
+	// Check for aquasmart/sensors/{device_id}/data format
+	if len(parts) >= 4 && parts[0] == "aquasmart" && parts[1] == "sensors" && parts[3] == "data" {
+		return parts[2]
+	}
+
+	// Fallback for aquasmart/sensors/data format
+	if len(parts) == 3 && parts[0] == "aquasmart" && parts[1] == "sensors" && parts[2] == "data" {
+		return "default"
+	}
+
+	// Unknown format, use default
+	log.Printf("Unknown topic format: %s, using default device ID", topic)
+	return "default"
+}
+
 // SetDataHandler sets the callback function for processed sensor data
 func (c *Client) SetDataHandler(handler func(*models.SensorReading)) {
 	c.dataHandler = handler
@@ -139,6 +162,9 @@ func (c *Client) SetFilterModeFunc(fn func() models.FilterMode) {
 func (c *Client) sensorDataHandler(client mqtt.Client, msg mqtt.Message) {
 	log.Printf("Received sensor data on topic %s: %s", msg.Topic(), string(msg.Payload()))
 
+	// Extract device ID from topic
+	deviceID := c.extractDeviceIDFromTopic(msg.Topic())
+
 	// Get current filter mode
 	currentFilterMode := models.FilterModeDrinking // Default
 	if c.filterModeFunc != nil {
@@ -146,10 +172,10 @@ func (c *Client) sensorDataHandler(client mqtt.Client, msg mqtt.Message) {
 	}
 
 	// Try parsing as JSON first (preferred format)
-	reading, err := c.parser.ParseSensorJSON(msg.Payload(), currentFilterMode)
+	reading, err := c.parser.ParseSensorJSON(msg.Payload(), deviceID, currentFilterMode)
 	if err != nil {
 		// Fallback to comma-separated format
-		reading, err = c.parser.ParseSensorString(string(msg.Payload()), currentFilterMode)
+		reading, err = c.parser.ParseSensorString(string(msg.Payload()), deviceID, currentFilterMode)
 		if err != nil {
 			log.Printf("Failed to parse sensor data: %v", err)
 			if c.errorHandler != nil {

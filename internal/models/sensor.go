@@ -2,11 +2,13 @@ package models
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
 // SensorReading represents a complete sensor reading from the STM32/ESP8266 device
 type SensorReading struct {
+	DeviceID   string     `json:"device_id"`
 	Timestamp  time.Time  `json:"timestamp"`
 	FilterMode FilterMode `json:"filter_mode"`
 	Flow       float64    `json:"flow"`
@@ -25,6 +27,7 @@ type SensorData struct {
 
 // WaterQualityStatus represents the overall water quality assessment
 type WaterQualityStatus struct {
+	DeviceID       string     `json:"device_id"`
 	Timestamp      time.Time  `json:"timestamp"`
 	FilterMode     FilterMode `json:"filter_mode"`
 	Flow           float64    `json:"flow"`
@@ -35,6 +38,28 @@ type WaterQualityStatus struct {
 	TDS            float64    `json:"tds"`
 	TDSStatus      string     `json:"tds_status"`
 	OverallQuality string     `json:"overall_quality"`
+}
+
+// GetDeviceType determines if device is pre-filtration or post-filtration based on device ID
+func (s *SensorReading) GetDeviceType() string {
+	deviceID := strings.ToLower(s.DeviceID)
+	if strings.Contains(deviceID, "pre") {
+		return "pre_filtration"
+	}
+	if strings.Contains(deviceID, "post") {
+		return "post_filtration"
+	}
+	return "unknown"
+}
+
+// IsPreFiltration returns true if this is a pre-filtration device
+func (s *SensorReading) IsPreFiltration() bool {
+	return s.GetDeviceType() == "pre_filtration"
+}
+
+// IsPostFiltration returns true if this is a post-filtration device
+func (s *SensorReading) IsPostFiltration() bool {
+	return s.GetDeviceType() == "post_filtration"
 }
 
 // ValidateReading checks if sensor values are within acceptable ranges
@@ -117,6 +142,7 @@ func (s *SensorReading) ToWaterQualityStatus() WaterQualityStatus {
 	}
 
 	return WaterQualityStatus{
+		DeviceID:       s.DeviceID,
 		Timestamp:      s.Timestamp,
 		FilterMode:     s.FilterMode,
 		Flow:           s.Flow,

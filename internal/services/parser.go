@@ -17,7 +17,7 @@ func NewSensorParser() *SensorParser {
 }
 
 // ParseSensorJSON parses JSON payload from STM32/ESP8266 device
-func (sp *SensorParser) ParseSensorJSON(payload []byte, filterMode models.FilterMode) (*models.SensorReading, error) {
+func (sp *SensorParser) ParseSensorJSON(payload []byte, deviceID string, filterMode models.FilterMode) (*models.SensorReading, error) {
 	var sensorData models.SensorData
 
 	// Parse the JSON payload
@@ -27,6 +27,7 @@ func (sp *SensorParser) ParseSensorJSON(payload []byte, filterMode models.Filter
 
 	// Create sensor reading with current timestamp and filter mode
 	reading := &models.SensorReading{
+		DeviceID:   deviceID,
 		Timestamp:  time.Now(),
 		FilterMode: filterMode,
 		Flow:       sensorData.Flow,
@@ -46,7 +47,7 @@ func (sp *SensorParser) ParseSensorJSON(payload []byte, filterMode models.Filter
 
 // ParseSensorString parses comma-separated sensor values (fallback format)
 // Expected format: "flow,ph,turbidity,tds"
-func (sp *SensorParser) ParseSensorString(payload string, filterMode models.FilterMode) (*models.SensorReading, error) {
+func (sp *SensorParser) ParseSensorString(payload string, deviceID string, filterMode models.FilterMode) (*models.SensorReading, error) {
 	var flow, ph, turbidity, tds float64
 
 	// Parse comma-separated values
@@ -57,6 +58,7 @@ func (sp *SensorParser) ParseSensorString(payload string, filterMode models.Filt
 
 	// Create sensor reading
 	reading := &models.SensorReading{
+		DeviceID:   deviceID,
 		Timestamp:  time.Now(),
 		FilterMode: filterMode,
 		Flow:       flow,
@@ -76,7 +78,8 @@ func (sp *SensorParser) ParseSensorString(payload string, filterMode models.Filt
 
 // FormatSensorReading formats sensor reading for logging or debugging
 func (sp *SensorParser) FormatSensorReading(reading *models.SensorReading) string {
-	return fmt.Sprintf("Time: %s, Filter: %s, Flow: %.2f L/min, pH: %.2f, Turbidity: %.2f NTU, TDS: %.2f ppm",
+	return fmt.Sprintf("Device: %s, Time: %s, Filter: %s, Flow: %.2f L/min, pH: %.2f, Turbidity: %.2f NTU, TDS: %.2f ppm",
+		reading.DeviceID,
 		reading.Timestamp.Format("2006-01-02 15:04:05"),
 		reading.FilterMode,
 		reading.Flow,

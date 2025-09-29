@@ -39,14 +39,14 @@ func (s *DatabaseStore) StoreSensorReading(reading models.SensorReading) error {
 			turbidity = EXCLUDED.turbidity,
 			tds = EXCLUDED.tds`
 
-	_, err := s.db.Exec(query, "default", reading.Timestamp, reading.FilterMode,
+	_, err := s.db.Exec(query, reading.DeviceID, reading.Timestamp, reading.FilterMode,
 		reading.Flow, reading.Ph, reading.Turbidity, reading.TDS)
 	if err != nil {
 		return fmt.Errorf("failed to store sensor reading: %w", err)
 	}
 
 	// Update device status
-	s.updateDeviceStatus("default", reading.FilterMode)
+	s.updateDeviceStatus(reading.DeviceID, reading.FilterMode)
 
 	// Also store water quality assessment
 	waterQuality := reading.ToWaterQualityStatus()
@@ -65,7 +65,7 @@ func (s *DatabaseStore) StoreWaterQualityStatus(status models.WaterQualityStatus
 		 tds, tds_status, overall_quality)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 
-	_, err := s.db.Exec(query, "default", status.Timestamp, status.FilterMode,
+	_, err := s.db.Exec(query, status.DeviceID, status.Timestamp, status.FilterMode,
 		status.Flow, status.Ph, status.PhStatus, status.Turbidity, status.TurbStatus,
 		status.TDS, status.TDSStatus, status.OverallQuality)
 	if err != nil {
