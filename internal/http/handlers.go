@@ -1,11 +1,14 @@
 package http
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/Capstone-E1/aquasmart_backend/internal/export"
 	"github.com/Capstone-E1/aquasmart_backend/internal/models"
 	"github.com/Capstone-E1/aquasmart_backend/internal/mqtt"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
@@ -13,15 +16,17 @@ import (
 
 // Handlers contains all HTTP request handlers
 type Handlers struct {
-	store      store.DataStore
-	mqttClient *mqtt.Client
+	store         store.DataStore
+	mqttClient    *mqtt.Client
+	exportService *export.ExportService
 }
 
 // NewHandlers creates a new handlers instance
 func NewHandlers(dataStore store.DataStore, mqttClient *mqtt.Client) *Handlers {
 	return &Handlers{
-		store:      dataStore,
-		mqttClient: mqttClient,
+		store:         dataStore,
+		mqttClient:    mqttClient,
+		exportService: export.NewExportService(),
 	}
 }
 
@@ -238,9 +243,9 @@ func (h *Handlers) GetActiveDevices(w http.ResponseWriter, r *http.Request) {
 // GetSystemStats returns system statistics
 func (h *Handlers) GetSystemStats(w http.ResponseWriter, r *http.Request) {
 	stats := map[string]interface{}{
-		"total_readings":   h.store.GetReadingCount(),
-		"active_devices":   len(h.store.GetActiveDevices()),
-		"server_time":      time.Now(),
+		"total_readings": h.store.GetReadingCount(),
+		"active_devices": len(h.store.GetActiveDevices()),
+		"server_time":    time.Now(),
 	}
 
 	response := APIResponse{
@@ -361,15 +366,18 @@ func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Start new filtration process (default 50L, can be made configurable)
-	h.store.StartFiltrationProcess(request.Mode, 50.0)
+	// Determine target volume based on mode (both set to 5L for now)
+	var targetVolume float64 = 5.0 // 5L for both drinking and household water
+
+	// Start new filtration process
+	h.store.StartFiltrationProcess(request.Mode, targetVolume)
 
 	// Return success response
 	responseData := map[string]interface{}{
-		"command":  filterCommand.Command,
-		"mode":     filterCommand.Mode,
-		"sent_at":  filterCommand.Timestamp,
-		"forced":   request.Force,
+		"command": filterCommand.Command,
+		"mode":    filterCommand.Mode,
+		"sent_at": filterCommand.Timestamp,
+		"forced":  request.Force,
 	}
 
 	if request.Force {
@@ -462,4 +470,224 @@ func (h *Handlers) GetFiltrationStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// ExportHistoryExcel handles GET requests to export purification history as Excel
+func (h *Handlers) ExportHistoryExcel(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters for date range filtering
+	startStr := r.URL.Query().Get("start")
+	endStr := r.URL.Query().Get("end")
+	filterMode := r.URL.Query().Get("filter_mode")
+
+	var start, end time.Time
+	var err error
+
+	// Set default time range (last 30 days if not specified)
+	if startStr == "" {
+		start = time.Now().AddDate(0, 0, -30)
+	} else {
+		start, err = time.Parse(time.RFC3339, startStr)
+		if err != nil {
+			h.sendErrorResponse(w, "Invalid start date format. Use RFC3339 format", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if endStr == "" {
+		end = time.Now()
+	} else {
+		end, err = time.Parse(time.RFC3339, endStr)
+		if err != nil {
+			h.sendErrorResponse(w, "Invalid end date format. Use RFC3339 format", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Get sensor readings from the store
+	readings := h.store.GetReadingsInRange(start, end)
+
+	// Filter by mode if specified
+	if filterMode != "" {
+		filteredReadings := []models.SensorReading{}
+		for _, reading := range readings {
+			if string(reading.FilterMode) == filterMode {
+				filteredReadings = append(filteredReadings, reading)
+			}
+		}
+		readings = filteredReadings
+	}
+
+	// Generate water quality assessments
+	waterQualityStatuses := []models.WaterQualityStatus{}
+	for _, reading := range readings {
+		status := reading.ToWaterQualityStatus()
+		waterQualityStatuses = append(waterQualityStatuses, status)
+	}
+
+	// Create mock filtration history (in real implementation, this would come from database)
+	filtrationHistory := h.generateFiltrationHistory(readings)
+
+	// Prepare export data
+	exportData := export.ExportData{
+		SensorReadings:          readings,
+		WaterQualityAssessments: waterQualityStatuses,
+		FiltrationHistory:       filtrationHistory,
+		ExportMetadata: export.ExportMetadata{
+			GeneratedAt:   time.Now(),
+			DateRange:     fmt.Sprintf("%s to %s", start.Format("2006-01-02"), end.Format("2006-01-02")),
+			TotalReadings: len(readings),
+			FilterModes:   []string{"drinking_water", "household_water"},
+			DeviceInfo:    "AquaSmart IoT Device",
+		},
+	}
+
+	// Generate Excel file
+	excelFile, err := h.exportService.GenerateExcel(exportData)
+	if err != nil {
+		h.sendErrorResponse(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+
+	// Set response headers
+	filename := fmt.Sprintf("aquasmart_history_%s_to_%s.xlsx",
+		start.Format("2006-01-02"), end.Format("2006-01-02"))
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+
+	// Write Excel file to response
+	if err := excelFile.Write(w); err != nil {
+		h.sendErrorResponse(w, "Failed to write Excel file", http.StatusInternalServerError)
+		return
+	}
+}
+
+// ExportHistoryCSV handles GET requests to export purification history as CSV
+func (h *Handlers) ExportHistoryCSV(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters for date range filtering
+	startStr := r.URL.Query().Get("start")
+	endStr := r.URL.Query().Get("end")
+	filterMode := r.URL.Query().Get("filter_mode")
+
+	var start, end time.Time
+	var err error
+
+	// Set default time range (last 30 days if not specified)
+	if startStr == "" {
+		start = time.Now().AddDate(0, 0, -30)
+	} else {
+		start, err = time.Parse(time.RFC3339, startStr)
+		if err != nil {
+			h.sendErrorResponse(w, "Invalid start date format. Use RFC3339 format", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if endStr == "" {
+		end = time.Now()
+	} else {
+		end, err = time.Parse(time.RFC3339, endStr)
+		if err != nil {
+			h.sendErrorResponse(w, "Invalid end date format. Use RFC3339 format", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Get sensor readings from the store
+	readings := h.store.GetReadingsInRange(start, end)
+
+	// Filter by mode if specified
+	if filterMode != "" {
+		filteredReadings := []models.SensorReading{}
+		for _, reading := range readings {
+			if string(reading.FilterMode) == filterMode {
+				filteredReadings = append(filteredReadings, reading)
+			}
+		}
+		readings = filteredReadings
+	}
+
+	// Generate CSV data
+	csvData, err := h.exportService.GenerateCSV(readings)
+	if err != nil {
+		h.sendErrorResponse(w, "Failed to generate CSV data", http.StatusInternalServerError)
+		return
+	}
+
+	// Set response headers
+	filename := fmt.Sprintf("aquasmart_history_%s_to_%s.csv",
+		start.Format("2006-01-02"), end.Format("2006-01-02"))
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+
+	// Write CSV data to response
+	csvWriter := csv.NewWriter(w)
+	if err := h.exportService.WriteCSV(csvWriter, csvData); err != nil {
+		h.sendErrorResponse(w, "Failed to write CSV data", http.StatusInternalServerError)
+		return
+	}
+}
+
+// generateFiltrationHistory creates mock filtration history from sensor readings
+// In a real implementation, this would query a dedicated filtration_sessions table
+func (h *Handlers) generateFiltrationHistory(readings []models.SensorReading) []export.FiltrationRecord {
+	history := []export.FiltrationRecord{}
+
+	if len(readings) == 0 {
+		return history
+	}
+
+	// Group readings by day and mode to simulate filtration sessions
+	sessions := make(map[string][]models.SensorReading)
+	for _, reading := range readings {
+		key := fmt.Sprintf("%s_%s", reading.Timestamp.Format("2006-01-02"), reading.FilterMode)
+		sessions[key] = append(sessions[key], reading)
+	}
+
+	id := 1
+	for _, sessionReadings := range sessions {
+		if len(sessionReadings) == 0 {
+			continue
+		}
+
+		startTime := sessionReadings[0].Timestamp
+		endTime := sessionReadings[len(sessionReadings)-1].Timestamp
+		duration := endTime.Sub(startTime)
+
+		// Calculate processed volume based on average flow
+		var totalFlow float64
+		for _, reading := range sessionReadings {
+			totalFlow += reading.Flow
+		}
+		avgFlow := totalFlow / float64(len(sessionReadings))
+		processedVolume := avgFlow * duration.Minutes()
+
+		// Target volume is 5L for both modes (as updated earlier)
+		targetVolume := 5.0
+		progress := (processedVolume / targetVolume) * 100
+		if progress > 100 {
+			progress = 100
+		}
+
+		status := "completed"
+		if progress < 100 {
+			status = "incomplete"
+		}
+
+		record := export.FiltrationRecord{
+			ID:              id,
+			StartTime:       startTime,
+			EndTime:         endTime,
+			FilterMode:      string(sessionReadings[0].FilterMode),
+			TargetVolume:    targetVolume,
+			ProcessedVolume: processedVolume,
+			Progress:        progress,
+			Status:          status,
+			Duration:        duration.Round(time.Second).String(),
+		}
+
+		history = append(history, record)
+		id++
+	}
+
+	return history
 }

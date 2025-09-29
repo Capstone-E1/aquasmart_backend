@@ -68,6 +68,12 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, mqttClient *mqtt.Clie
 		r.Route("/filtration", func(r chi.Router) {
 			r.Get("/status", handlers.GetFiltrationStatus)
 		})
+
+		// Export routes for data history
+		r.Route("/export", func(r chi.Router) {
+			r.Get("/history.xlsx", handlers.ExportHistoryExcel)
+			r.Get("/history.csv", handlers.ExportHistoryCSV)
+		})
 	})
 
 	// WebSocket route for real-time updates
