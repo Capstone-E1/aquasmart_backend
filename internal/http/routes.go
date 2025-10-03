@@ -46,6 +46,15 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, mqttClient *mqtt.Clie
 			// Recent readings with optional filtering
 			r.Get("/recent", handlers.GetRecentReadings)
 
+			// Get all sensor data (with pagination and filters)
+			r.Get("/all", handlers.GetAllSensorData)
+
+			// Get all sensor data (simple format)
+			r.Get("/all/simple", handlers.GetAllSensorDataSimple)
+
+			// Get statistics about all sensor data
+			r.Get("/stats", handlers.GetSensorDataStats)
+
 			// Historical data in time range
 			r.Get("/history", handlers.GetReadingsInRange)
 
