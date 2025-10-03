@@ -16,11 +16,11 @@ type DB struct {
 
 // Connect establishes connection to PostgreSQL database
 func Connect(cfg config.DatabaseConfig) (*DB, error) {
-	// Build connection string for Aiven PostgreSQL
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+	// Build connection string for Aiven PostgreSQL with additional SSL parameters
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s sslrootcert=disable sslcert=disable sslkey=disable",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode)
 
-	log.Printf("Connecting to database at %s:%s/%s", cfg.Host, cfg.Port, cfg.DBName)
+	log.Printf("Connecting to Aiven database at %s:%s/%s", cfg.Host, cfg.Port, cfg.DBName)
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {

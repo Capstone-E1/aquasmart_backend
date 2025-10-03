@@ -51,6 +51,9 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, mqttClient *mqtt.Clie
 
 			// Water quality status
 			r.Get("/quality", handlers.GetWaterQualityStatus)
+
+			// Add sensor data manually (for testing)
+			r.Post("/data", handlers.AddSensorData)
 		})
 
 		// Device management routes

@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -286,6 +287,59 @@ func (h *Handlers) sendErrorResponse(w http.ResponseWriter, message string, stat
 	json.NewEncoder(w).Encode(response)
 }
 
+// AddSensorData handles POST requests to manually add sensor data (for testing)
+func (h *Handlers) AddSensorData(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		FilterMode string  `json:"filter_mode"`
+		Flow       float64 `json:"flow"`
+		Ph         float64 `json:"ph"`
+		Turbidity  float64 `json:"turbidity"`
+		TDS        float64 `json:"tds"`
+	}
+
+	// Parse request body
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		h.sendErrorResponse(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate filter mode
+	filterMode := models.FilterMode(request.FilterMode)
+	if filterMode != models.FilterModeDrinking && filterMode != models.FilterModeHousehold {
+		h.sendErrorResponse(w, "Invalid filter_mode. Use 'drinking_water' or 'household_water'", http.StatusBadRequest)
+		return
+	}
+
+	// Create sensor reading
+	reading := models.SensorReading{
+		Timestamp:  time.Now(),
+		FilterMode: filterMode,
+		Flow:       request.Flow,
+		Ph:         request.Ph,
+		Turbidity:  request.Turbidity,
+		TDS:        request.TDS,
+	}
+
+	// Validate the reading
+	if !reading.ValidateReading() {
+		h.sendErrorResponse(w, "Invalid sensor reading values", http.StatusBadRequest)
+		return
+	}
+
+	// Store the reading
+	h.store.AddSensorReading(reading)
+
+	// Return success response
+	response := APIResponse{
+		Success: true,
+		Message: "Sensor data added successfully",
+		Data:    reading,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 // SetFilterMode handles POST requests to set the water filter mode
 func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 	var request struct {
@@ -360,10 +414,13 @@ func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 	// Update current filter mode in store
 	h.store.SetCurrentFilterMode(request.Mode)
 
-	// Send command via MQTT
-	if err := h.mqttClient.PublishFilterCommand(filterCommand); err != nil {
-		h.sendErrorResponse(w, "Failed to send filter command", http.StatusInternalServerError)
-		return
+	// Send command via MQTT (optional - skip if MQTT not connected)
+	if h.mqttClient.IsConnected() {
+		if err := h.mqttClient.PublishFilterCommand(filterCommand); err != nil {
+			log.Printf("⚠️  Warning: Failed to send MQTT command: %v", err)
+		}
+	} else {
+		log.Printf("ℹ️  MQTT not connected, filter mode change processed locally only")
 	}
 
 	// Determine target volume based on mode (both set to 5L for now)
