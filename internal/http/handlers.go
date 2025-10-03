@@ -748,3 +748,312 @@ func (h *Handlers) generateFiltrationHistory(readings []models.SensorReading) []
 
 	return history
 }
+
+// GetAllSensorData returns all sensor data with optional filtering and pagination
+func (h *Handlers) GetAllSensorData(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
+	filterModeStr := r.URL.Query().Get("filter_mode")
+	sortOrder := r.URL.Query().Get("sort") // "asc" or "desc"
+
+	// Set default values
+	limit := 100 // Default limit
+	if limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 1000 {
+			limit = parsedLimit
+		}
+	}
+
+	offset := 0 // Default offset
+	if offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	if sortOrder == "" {
+		sortOrder = "desc" // Default to newest first
+	}
+
+	// Get all readings
+	allReadings := h.store.GetRecentReadings(10000) // Get a large number to simulate "all"
+
+	// Filter by mode if specified
+	var filteredReadings []models.SensorReading
+	if filterModeStr != "" {
+		filterMode := models.FilterMode(filterModeStr)
+		if filterMode != models.FilterModeDrinking && filterMode != models.FilterModeHousehold {
+			h.sendErrorResponse(w, "Invalid filter_mode. Use 'drinking_water' or 'household_water'", http.StatusBadRequest)
+			return
+		}
+
+		for _, reading := range allReadings {
+			if reading.FilterMode == filterMode {
+				filteredReadings = append(filteredReadings, reading)
+			}
+		}
+	} else {
+		filteredReadings = allReadings
+	}
+
+	// Sort readings
+	if sortOrder == "asc" {
+		// Sort oldest first
+		for i := 0; i < len(filteredReadings)-1; i++ {
+			for j := i + 1; j < len(filteredReadings); j++ {
+				if filteredReadings[i].Timestamp.After(filteredReadings[j].Timestamp) {
+					filteredReadings[i], filteredReadings[j] = filteredReadings[j], filteredReadings[i]
+				}
+			}
+		}
+	}
+	// Default is already desc (newest first)
+
+	// Apply pagination
+	totalRecords := len(filteredReadings)
+	start := offset
+	end := offset + limit
+
+	if start >= totalRecords {
+		filteredReadings = []models.SensorReading{}
+	} else {
+		if end > totalRecords {
+			end = totalRecords
+		}
+		filteredReadings = filteredReadings[start:end]
+	}
+
+	// Prepare response with metadata
+	responseData := map[string]interface{}{
+		"data": filteredReadings,
+		"pagination": map[string]interface{}{
+			"total_records":    totalRecords,
+			"current_page":     (offset / limit) + 1,
+			"per_page":         limit,
+			"total_pages":      (totalRecords + limit - 1) / limit,
+			"has_next":         end < totalRecords,
+			"has_previous":     offset > 0,
+		},
+		"filters": map[string]interface{}{
+			"filter_mode": filterModeStr,
+			"sort_order":  sortOrder,
+		},
+	}
+
+	response := APIResponse{
+		Success: true,
+		Data:    responseData,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetAllSensorDataSimple returns all sensor data in simple format (just array)
+func (h *Handlers) GetAllSensorDataSimple(w http.ResponseWriter, r *http.Request) {
+	filterModeStr := r.URL.Query().Get("filter_mode")
+	sortOrder := r.URL.Query().Get("sort") // "asc" or "desc"
+
+	// Get all readings
+	allReadings := h.store.GetRecentReadings(10000) // Get a large number
+
+	// Filter by mode if specified
+	var filteredReadings []models.SensorReading
+	if filterModeStr != "" {
+		filterMode := models.FilterMode(filterModeStr)
+		if filterMode != models.FilterModeDrinking && filterMode != models.FilterModeHousehold {
+			h.sendErrorResponse(w, "Invalid filter_mode. Use 'drinking_water' or 'household_water'", http.StatusBadRequest)
+			return
+		}
+
+		for _, reading := range allReadings {
+			if reading.FilterMode == filterMode {
+				filteredReadings = append(filteredReadings, reading)
+			}
+		}
+	} else {
+		filteredReadings = allReadings
+	}
+
+	// Sort readings if specified
+	if sortOrder == "asc" {
+		// Sort oldest first
+		for i := 0; i < len(filteredReadings)-1; i++ {
+			for j := i + 1; j < len(filteredReadings); j++ {
+				if filteredReadings[i].Timestamp.After(filteredReadings[j].Timestamp) {
+					filteredReadings[i], filteredReadings[j] = filteredReadings[j], filteredReadings[i]
+				}
+			}
+		}
+	}
+
+	response := APIResponse{
+		Success: true,
+		Data:    filteredReadings,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetSensorDataStats returns statistics about all sensor data
+func (h *Handlers) GetSensorDataStats(w http.ResponseWriter, r *http.Request) {
+	filterModeStr := r.URL.Query().Get("filter_mode")
+
+	// Get all readings
+	allReadings := h.store.GetRecentReadings(10000)
+
+	// Filter by mode if specified
+	var filteredReadings []models.SensorReading
+	if filterModeStr != "" {
+		filterMode := models.FilterMode(filterModeStr)
+		if filterMode != models.FilterModeDrinking && filterMode != models.FilterModeHousehold {
+			h.sendErrorResponse(w, "Invalid filter_mode. Use 'drinking_water' or 'household_water'", http.StatusBadRequest)
+			return
+		}
+
+		for _, reading := range allReadings {
+			if reading.FilterMode == filterMode {
+				filteredReadings = append(filteredReadings, reading)
+			}
+		}
+	} else {
+		filteredReadings = allReadings
+	}
+
+	if len(filteredReadings) == 0 {
+		h.sendErrorResponse(w, "No sensor data found", http.StatusNotFound)
+		return
+	}
+
+	// Calculate statistics
+	stats := calculateSensorStats(filteredReadings)
+
+	response := APIResponse{
+		Success: true,
+		Data:    stats,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// SensorDataStats represents statistics about sensor data
+type SensorDataStats struct {
+	TotalReadings int                    `json:"total_readings"`
+	DateRange     map[string]string      `json:"date_range"`
+	PhStats       map[string]float64     `json:"ph_stats"`
+	TDSStats      map[string]float64     `json:"tds_stats"`
+	TurbidityStats map[string]float64    `json:"turbidity_stats"`
+	FlowStats     map[string]float64     `json:"flow_stats"`
+	FilterModes   map[string]int         `json:"filter_modes"`
+	QualityBreakdown map[string]int      `json:"quality_breakdown"`
+}
+
+// calculateSensorStats calculates comprehensive statistics
+func calculateSensorStats(readings []models.SensorReading) SensorDataStats {
+	if len(readings) == 0 {
+		return SensorDataStats{}
+	}
+
+	// Initialize stats
+	stats := SensorDataStats{
+		TotalReadings: len(readings),
+		DateRange:     make(map[string]string),
+		PhStats:       make(map[string]float64),
+		TDSStats:      make(map[string]float64),
+		TurbidityStats: make(map[string]float64),
+		FlowStats:     make(map[string]float64),
+		FilterModes:   make(map[string]int),
+		QualityBreakdown: make(map[string]int),
+	}
+
+	// Initialize values with first reading
+	minPh, maxPh := readings[0].Ph, readings[0].Ph
+	minTDS, maxTDS := readings[0].TDS, readings[0].TDS
+	minTurbidity, maxTurbidity := readings[0].Turbidity, readings[0].Turbidity
+	minFlow, maxFlow := readings[0].Flow, readings[0].Flow
+	sumPh, sumTDS, sumTurbidity, sumFlow := 0.0, 0.0, 0.0, 0.0
+
+	earliestTime := readings[0].Timestamp
+	latestTime := readings[0].Timestamp
+
+	// Calculate stats
+	for _, reading := range readings {
+		// Date range
+		if reading.Timestamp.Before(earliestTime) {
+			earliestTime = reading.Timestamp
+		}
+		if reading.Timestamp.After(latestTime) {
+			latestTime = reading.Timestamp
+		}
+
+		// pH stats
+		if reading.Ph < minPh {
+			minPh = reading.Ph
+		}
+		if reading.Ph > maxPh {
+			maxPh = reading.Ph
+		}
+		sumPh += reading.Ph
+
+		// TDS stats
+		if reading.TDS < minTDS {
+			minTDS = reading.TDS
+		}
+		if reading.TDS > maxTDS {
+			maxTDS = reading.TDS
+		}
+		sumTDS += reading.TDS
+
+		// Turbidity stats
+		if reading.Turbidity < minTurbidity {
+			minTurbidity = reading.Turbidity
+		}
+		if reading.Turbidity > maxTurbidity {
+			maxTurbidity = reading.Turbidity
+		}
+		sumTurbidity += reading.Turbidity
+
+		// Flow stats
+		if reading.Flow < minFlow {
+			minFlow = reading.Flow
+		}
+		if reading.Flow > maxFlow {
+			maxFlow = reading.Flow
+		}
+		sumFlow += reading.Flow
+
+		// Filter modes count
+		stats.FilterModes[string(reading.FilterMode)]++
+
+		// Quality breakdown
+		quality := reading.ToWaterQualityStatus().OverallQuality
+		stats.QualityBreakdown[quality]++
+	}
+
+	count := float64(len(readings))
+
+	// Fill stats
+	stats.DateRange["earliest"] = earliestTime.Format("2006-01-02 15:04:05")
+	stats.DateRange["latest"] = latestTime.Format("2006-01-02 15:04:05")
+
+	stats.PhStats["min"] = minPh
+	stats.PhStats["max"] = maxPh
+	stats.PhStats["average"] = sumPh / count
+
+	stats.TDSStats["min"] = minTDS
+	stats.TDSStats["max"] = maxTDS
+	stats.TDSStats["average"] = sumTDS / count
+
+	stats.TurbidityStats["min"] = minTurbidity
+	stats.TurbidityStats["max"] = maxTurbidity
+	stats.TurbidityStats["average"] = sumTurbidity / count
+
+	stats.FlowStats["min"] = minFlow
+	stats.FlowStats["max"] = maxFlow
+	stats.FlowStats["average"] = sumFlow / count
+
+	return stats
+}
