@@ -7,8 +7,8 @@ require (
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/cors v1.2.2
 	github.com/gorilla/websocket v1.5.3
+	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
-<<<<<<< HEAD
 	github.com/xuri/excelize/v2 v2.9.1
 )
 
@@ -22,12 +22,4 @@ require (
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sync v0.14.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
-=======
-)
-
-require (
-	github.com/joho/godotenv v1.5.1 // indirect
-	golang.org/x/net v0.27.0 // indirect
-	golang.org/x/sync v0.7.0 // indirect
->>>>>>> 2109373eff9027eaa6928b456ee5fc069a32831c
 )
