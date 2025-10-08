@@ -63,6 +63,9 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, mqttClient *mqtt.Clie
 
 			// Add sensor data manually (for testing)
 			r.Post("/data", handlers.AddSensorData)
+
+			// Best daily values for today
+			r.Get("/best-daily", handlers.GetBestDailyValues)
 		})
 
 		// Device management routes
