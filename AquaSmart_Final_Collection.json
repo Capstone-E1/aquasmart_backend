@@ -1,0 +1,562 @@
+{
+  "info": {
+    "name": "AquaSmart Backend API - Final Collection",
+    "description": "Collection lengkap untuk testing semua endpoint AquaSmart Water Purification API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0.0"
+  },
+  "item": [
+    {
+      "name": "System Endpoints",
+      "item": [
+        {
+          "name": "Get System Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/stats",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "stats"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sensor Data Endpoints",
+      "item": [
+        {
+          "name": "Get Latest Sensor Data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/latest",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "latest"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Latest Data by Filter Mode - Drinking Water",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/latest?filter_mode=drinking_water",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "latest"],
+              "query": [
+                {
+                  "key": "filter_mode",
+                  "value": "drinking_water",
+                  "description": "Filter untuk air minum"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Latest Data by Filter Mode - Household Water",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/latest?filter_mode=household_water",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "latest"],
+              "query": [
+                {
+                  "key": "filter_mode",
+                  "value": "household_water",
+                  "description": "Filter untuk air rumah tangga"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recent Readings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/recent?limit=20",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "recent"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Jumlah data yang ingin diambil"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recent Readings by Filter Mode",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/recent?limit=50&filter_mode=drinking_water",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "recent"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "filter_mode",
+                  "value": "drinking_water",
+                  "description": "drinking_water atau household_water"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Sensor Data (dengan Pagination)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/all?limit=50&offset=0&sort=desc",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "all"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Jumlah data per halaman (max 1000)"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Mulai dari data ke berapa"
+                },
+                {
+                  "key": "sort",
+                  "value": "desc",
+                  "description": "Urutan data: asc (lama ke baru) atau desc (baru ke lama)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Sensor Data - Filter Mode Drinking Water",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/all?filter_mode=drinking_water&limit=100&sort=desc",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "all"],
+              "query": [
+                {
+                  "key": "filter_mode",
+                  "value": "drinking_water",
+                  "description": "Hanya data untuk mode air minum"
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Maksimal 100 data"
+                },
+                {
+                  "key": "sort",
+                  "value": "desc",
+                  "description": "Data terbaru dulu"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Sensor Data - Simple Format",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/all/simple",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "all", "simple"],
+              "query": [
+                {
+                  "key": "filter_mode",
+                  "value": "",
+                  "description": "Optional: drinking_water atau household_water",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "desc",
+                  "description": "Optional: asc atau desc",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Sensor Data Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/stats",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "stats"],
+              "query": [
+                {
+                  "key": "filter_mode",
+                  "value": "",
+                  "description": "Optional: drinking_water atau household_water",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Historical Data in Range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/history?start=2025-10-01T00:00:00Z&end=2025-10-08T23:59:59Z",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "history"],
+              "query": [
+                {
+                  "key": "start",
+                  "value": "2025-10-01T00:00:00Z",
+                  "description": "Start time dalam format RFC3339"
+                },
+                {
+                  "key": "end",
+                  "value": "2025-10-08T23:59:59Z",
+                  "description": "End time dalam format RFC3339"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Water Quality Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/quality",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "quality"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Water Quality Status by Filter Mode",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/quality?filter_mode=drinking_water",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "quality"],
+              "query": [
+                {
+                  "key": "filter_mode",
+                  "value": "drinking_water",
+                  "description": "drinking_water atau household_water"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Daily Analysis Endpoints",
+      "item": [
+        {
+          "name": "Get Best Daily Values (Today)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/best-daily",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "best-daily"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Worst Daily Values (Today)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/worst-daily",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "worst-daily"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Data Management Endpoints",
+      "item": [
+        {
+          "name": "Add Sensor Data - Good Quality",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filter_mode\": \"drinking_water\",\n  \"flow\": 2.5,\n  \"ph\": 7.2,\n  \"turbidity\": 1.5,\n  \"tds\": 250.0\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/data",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "data"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Sensor Data - Poor Quality",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filter_mode\": \"household_water\",\n  \"flow\": 1.0,\n  \"ph\": 9.1,\n  \"turbidity\": 6.2,\n  \"tds\": 580.0\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8082/api/v1/sensors/data",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "sensors", "data"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Filter Control Endpoints",
+      "item": [
+        {
+          "name": "Set Filter Mode to Drinking Water",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"drinking_water\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8082/api/v1/commands/filter",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "commands", "filter"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set Filter Mode to Household Water",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"household_water\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8082/api/v1/commands/filter",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "commands", "filter"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Force Set Filter Mode",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"drinking_water\",\n  \"force\": true\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8082/api/v1/commands/filter",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "commands", "filter"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Export Data Endpoints",
+      "item": [
+        {
+          "name": "Export History to Excel",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/export/history.xlsx",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "export", "history.xlsx"],
+              "query": [
+                {
+                  "key": "start",
+                  "value": "",
+                  "description": "Optional: Start date (RFC3339 format)",
+                  "disabled": true
+                },
+                {
+                  "key": "end",
+                  "value": "",
+                  "description": "Optional: End date (RFC3339 format)",
+                  "disabled": true
+                },
+                {
+                  "key": "filter_mode",
+                  "value": "",
+                  "description": "Optional: drinking_water atau household_water",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export History to CSV",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/v1/export/history.csv",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8082",
+              "path": ["api", "v1", "export", "history.csv"],
+              "query": [
+                {
+                  "key": "start",
+                  "value": "2025-10-01T00:00:00Z",
+                  "description": "Start date (RFC3339 format)",
+                  "disabled": true
+                },
+                {
+                  "key": "end",
+                  "value": "2025-10-08T23:59:59Z",
+                  "description": "End date (RFC3339 format)",
+                  "disabled": true
+                },
+                {
+                  "key": "filter_mode",
+                  "value": "drinking_water",
+                  "description": "Filter by mode",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
