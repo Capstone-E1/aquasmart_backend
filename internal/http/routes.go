@@ -65,6 +65,9 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, mqttClient *mqtt.Clie
 
 			// Best daily values for today
 			r.Get("/best-daily", handlers.GetBestDailyValues)
+
+			// Worst daily values for today
+			r.Get("/worst-daily", handlers.GetWorstDailyValues)
 		})
 
 		// Command routes for filter control
