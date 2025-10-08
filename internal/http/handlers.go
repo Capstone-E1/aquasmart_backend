@@ -1057,3 +1057,87 @@ func calculateSensorStats(readings []models.SensorReading) SensorDataStats {
 
 	return stats
 }
+
+// GetBestDailyValues returns the best pH, TDS, and Turbidity values for today
+func (h *Handlers) GetBestDailyValues(w http.ResponseWriter, r *http.Request) {
+	// Get today's date
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	// Get all readings for today
+	readings := h.store.GetReadingsInRange(startOfDay, endOfDay)
+
+	if len(readings) == 0 {
+		h.sendErrorResponse(w, "No sensor data found for today", http.StatusNotFound)
+		return
+	}
+
+	// Calculate best values
+	bestValues := calculateBestValues(readings)
+
+	response := APIResponse{
+		Success: true,
+		Data:    bestValues,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// BestDailyValues represents the best values for a day
+type BestDailyValues struct {
+	Date          string  `json:"date"`
+	BestPH        float64 `json:"best_ph"`
+	BestTDS       float64 `json:"best_tds"`
+	BestTurbidity float64 `json:"best_turbidity"`
+	TotalReadings int     `json:"total_readings"`
+}
+
+// calculateBestValues calculates the best pH, TDS, and Turbidity values from readings
+func calculateBestValues(readings []models.SensorReading) BestDailyValues {
+	if len(readings) == 0 {
+		return BestDailyValues{}
+	}
+
+	// For pH: ideal range is 6.5-8.5, so best is closest to 7.0
+	// For TDS: lower is better for drinking water (ideal < 300 ppm)
+	// For Turbidity: lower is better (ideal < 1 NTU)
+
+	bestPH := readings[0].Ph
+	bestTDS := readings[0].TDS
+	bestTurbidity := readings[0].Turbidity
+
+	for _, reading := range readings {
+		// Best pH is closest to 7.0
+		if abs(reading.Ph-7.0) < abs(bestPH-7.0) {
+			bestPH = reading.Ph
+		}
+
+		// Best TDS is lowest
+		if reading.TDS < bestTDS {
+			bestTDS = reading.TDS
+		}
+
+		// Best Turbidity is lowest
+		if reading.Turbidity < bestTurbidity {
+			bestTurbidity = reading.Turbidity
+		}
+	}
+
+	return BestDailyValues{
+		Date:          time.Now().Format("2006-01-02"),
+		BestPH:        bestPH,
+		BestTDS:       bestTDS,
+		BestTurbidity: bestTurbidity,
+		TotalReadings: len(readings),
+	}
+}
+
+// abs returns the absolute value of a float64
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
