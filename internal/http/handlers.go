@@ -999,3 +999,79 @@ func abs(x float64) float64 {
 	}
 	return x
 }
+
+// GetWorstDailyValues returns the worst pH, TDS, and Turbidity values for today
+func (h *Handlers) GetWorstDailyValues(w http.ResponseWriter, r *http.Request) {
+	// Get today's date
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	// Get all readings for today
+	readings := h.store.GetReadingsInRange(startOfDay, endOfDay)
+
+	if len(readings) == 0 {
+		h.sendErrorResponse(w, "No sensor data found for today", http.StatusNotFound)
+		return
+	}
+
+	// Calculate worst values
+	worstValues := calculateWorstValues(readings)
+
+	response := APIResponse{
+		Success: true,
+		Data:    worstValues,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// WorstDailyValues represents the worst values for a day
+type WorstDailyValues struct {
+	Date           string  `json:"date"`
+	WorstPH        float64 `json:"worst_ph"`
+	WorstTDS       float64 `json:"worst_tds"`
+	WorstTurbidity float64 `json:"worst_turbidity"`
+	TotalReadings  int     `json:"total_readings"`
+}
+
+// calculateWorstValues calculates the worst pH, TDS, and Turbidity values from readings
+func calculateWorstValues(readings []models.SensorReading) WorstDailyValues {
+	if len(readings) == 0 {
+		return WorstDailyValues{}
+	}
+
+	// For pH: worst is farthest from 7.0 (ideal)
+	// For TDS: higher is worse for drinking water
+	// For Turbidity: higher is worse (more cloudy)
+
+	worstPH := readings[0].Ph
+	worstTDS := readings[0].TDS
+	worstTurbidity := readings[0].Turbidity
+
+	for _, reading := range readings {
+		// Worst pH is farthest from 7.0
+		if abs(reading.Ph-7.0) > abs(worstPH-7.0) {
+			worstPH = reading.Ph
+		}
+
+		// Worst TDS is highest
+		if reading.TDS > worstTDS {
+			worstTDS = reading.TDS
+		}
+
+		// Worst Turbidity is highest
+		if reading.Turbidity > worstTurbidity {
+			worstTurbidity = reading.Turbidity
+		}
+	}
+
+	return WorstDailyValues{
+		Date:           time.Now().Format("2006-01-02"),
+		WorstPH:        worstPH,
+		WorstTDS:       worstTDS,
+		WorstTurbidity: worstTurbidity,
+		TotalReadings:  len(readings),
+	}
+}
