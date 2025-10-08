@@ -34,8 +34,7 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, mqttClient *mqtt.Clie
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
-		// Health check
-		r.Get("/health", handlers.HealthCheck)
+		// System stats
 		r.Get("/stats", handlers.GetSystemStats)
 
 		// Sensor data routes
@@ -68,20 +67,9 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, mqttClient *mqtt.Clie
 			r.Get("/best-daily", handlers.GetBestDailyValues)
 		})
 
-		// Device management routes
-		r.Route("/devices", func(r chi.Router) {
-			r.Get("/", handlers.GetActiveDevices)
-		})
-
 		// Command routes for filter control
 		r.Route("/commands", func(r chi.Router) {
 			r.Post("/filter", handlers.SetFilterMode)
-			r.Get("/filter/status", handlers.GetFilterStatus)
-		})
-
-		// Filtration process monitoring routes
-		r.Route("/filtration", func(r chi.Router) {
-			r.Get("/status", handlers.GetFiltrationStatus)
 		})
 
 		// Export routes for data history

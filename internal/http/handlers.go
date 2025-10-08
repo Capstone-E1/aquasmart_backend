@@ -79,23 +79,6 @@ func (h *Handlers) GetLatestReadings(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// GetLatestReadingByDevice returns the latest sensor reading (single device system)
-func (h *Handlers) GetLatestReadingByDevice(w http.ResponseWriter, r *http.Request) {
-	reading, exists := h.store.GetLatestReading()
-	if !exists {
-		h.sendErrorResponse(w, "No sensor data available", http.StatusNotFound)
-		return
-	}
-
-	response := APIResponse{
-		Success: true,
-		Data:    reading,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
 // GetWaterQualityStatus returns water quality assessment (optionally filtered by mode)
 func (h *Handlers) GetWaterQualityStatus(w http.ResponseWriter, r *http.Request) {
 	filterModeStr := r.URL.Query().Get("filter_mode")
@@ -130,23 +113,6 @@ func (h *Handlers) GetWaterQualityStatus(w http.ResponseWriter, r *http.Request)
 	response := APIResponse{
 		Success: true,
 		Data:    statuses,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// GetWaterQualityStatusByDevice returns water quality assessment (single device system)
-func (h *Handlers) GetWaterQualityStatusByDevice(w http.ResponseWriter, r *http.Request) {
-	status, exists := h.store.GetWaterQualityStatus()
-	if !exists {
-		h.sendErrorResponse(w, "No sensor data available", http.StatusNotFound)
-		return
-	}
-
-	response := APIResponse{
-		Success: true,
-		Data:    status,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -228,19 +194,6 @@ func (h *Handlers) GetReadingsInRange(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// GetActiveDevices returns a list of all active device IDs
-func (h *Handlers) GetActiveDevices(w http.ResponseWriter, r *http.Request) {
-	devices := h.store.GetActiveDevices()
-
-	response := APIResponse{
-		Success: true,
-		Data:    devices,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
 // GetSystemStats returns system statistics
 func (h *Handlers) GetSystemStats(w http.ResponseWriter, r *http.Request) {
 	stats := map[string]interface{}{
@@ -252,23 +205,6 @@ func (h *Handlers) GetSystemStats(w http.ResponseWriter, r *http.Request) {
 	response := APIResponse{
 		Success: true,
 		Data:    stats,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// HealthCheck returns the health status of the API
-func (h *Handlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
-	health := map[string]interface{}{
-		"status":    "healthy",
-		"timestamp": time.Now(),
-		"version":   "1.0.0",
-	}
-
-	response := APIResponse{
-		Success: true,
-		Data:    health,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -444,84 +380,6 @@ func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 	response := APIResponse{
 		Success: true,
 		Message: "Filter mode command sent successfully",
-		Data:    responseData,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// GetFilterStatus handles GET requests to get the current filter status
-func (h *Handlers) GetFilterStatus(w http.ResponseWriter, r *http.Request) {
-	currentMode := h.store.GetCurrentFilterMode()
-
-	// Check if we have recent data for this mode to determine if it's active
-	_, hasData := h.store.GetLatestReadingByMode(currentMode)
-
-	status := models.NewFilterStatus(currentMode, hasData)
-
-	// Include filtration process info if available
-	if process, exists := h.store.GetFiltrationProcess(); exists {
-		status.FiltrationState = process.State
-		status.ProcessStartedAt = &process.StartedAt
-		status.EstimatedCompletion = &process.EstimatedCompletion
-	}
-
-	response := APIResponse{
-		Success: true,
-		Data:    status,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// GetFiltrationStatus handles GET requests to get detailed filtration process status
-func (h *Handlers) GetFiltrationStatus(w http.ResponseWriter, r *http.Request) {
-	process, exists := h.store.GetFiltrationProcess()
-	if !exists {
-		// No active filtration process
-		idleData := map[string]interface{}{
-			"state":           models.FiltrationStateIdle,
-			"can_change_mode": true,
-			"message":         "No active filtration process",
-		}
-
-		response := APIResponse{
-			Success: true,
-			Data:    idleData,
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	// Calculate whether mode can be changed
-	canChange, reason := process.CanChangeMode()
-
-	// Prepare detailed response
-	responseData := map[string]interface{}{
-		"state":                process.State,
-		"current_mode":         process.CurrentMode,
-		"started_at":           process.StartedAt,
-		"last_updated":         process.LastUpdated,
-		"progress":             process.Progress,
-		"processed_volume":     process.ProcessedVolume,
-		"target_volume":        process.TargetVolume,
-		"current_flow_rate":    process.CurrentFlowRate,
-		"estimated_completion": process.EstimatedCompletion,
-		"can_change_mode":      canChange,
-		"can_interrupt":        process.CanInterrupt,
-		"status_message":       process.GetStatusMessage(),
-	}
-
-	if !canChange {
-		responseData["block_reason"] = reason
-	}
-
-	response := APIResponse{
-		Success: true,
 		Data:    responseData,
 	}
 

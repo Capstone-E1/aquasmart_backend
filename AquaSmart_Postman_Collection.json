@@ -6,30 +6,15 @@
   },
   "item": [
     {
-      "name": "Health Check",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "http://localhost:8080/api/v1/health",
-          "protocol": "http",
-          "host": ["localhost"],
-          "port": "8080",
-          "path": ["api", "v1", "health"]
-        }
-      },
-      "response": []
-    },
-    {
       "name": "Get Latest Sensor Data",
       "request": {
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:8080/api/v1/sensors/latest",
+          "raw": "http://localhost:8082/api/v1/sensors/latest",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "sensors", "latest"]
         }
       },
@@ -41,10 +26,10 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:8080/api/v1/sensors/latest?filter_mode=drinking_water",
+          "raw": "http://localhost:8082/api/v1/sensors/latest?filter_mode=drinking_water",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "sensors", "latest"],
           "query": [
             {
@@ -63,10 +48,10 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:8080/api/v1/sensors/recent?limit=20",
+          "raw": "http://localhost:8082/api/v1/sensors/recent?limit=20",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "sensors", "recent"],
           "query": [
             {
@@ -84,10 +69,10 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:8080/api/v1/sensors/quality",
+          "raw": "http://localhost:8082/api/v1/sensors/quality",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "sensors", "quality"]
         }
       },
@@ -99,10 +84,10 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:8080/api/v1/sensors/history?start=2024-01-01T00:00:00Z&end=2024-12-31T23:59:59Z",
+          "raw": "http://localhost:8082/api/v1/sensors/history?start=2024-01-01T00:00:00Z&end=2024-12-31T23:59:59Z",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "sensors", "history"],
           "query": [
             {
@@ -133,10 +118,10 @@
           "raw": "{\n  \"mode\": \"drinking_water\"\n}"
         },
         "url": {
-          "raw": "http://localhost:8080/api/v1/commands/filter",
+          "raw": "http://localhost:8082/api/v1/commands/filter",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "commands", "filter"]
         }
       },
@@ -157,10 +142,10 @@
           "raw": "{\n  \"mode\": \"household_water\"\n}"
         },
         "url": {
-          "raw": "http://localhost:8080/api/v1/commands/filter",
+          "raw": "http://localhost:8082/api/v1/commands/filter",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "commands", "filter"]
         }
       },
@@ -181,10 +166,10 @@
           "raw": "{\n  \"mode\": \"drinking_water\",\n  \"force\": true\n}"
         },
         "url": {
-          "raw": "http://localhost:8080/api/v1/commands/filter",
+          "raw": "http://localhost:8082/api/v1/commands/filter",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "commands", "filter"]
         }
       },
@@ -196,10 +181,10 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:8080/api/v1/commands/filter/status",
+          "raw": "http://localhost:8082/api/v1/commands/filter/status",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "commands", "filter", "status"]
         }
       },
@@ -211,10 +196,10 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:8080/api/v1/filtration/status",
+          "raw": "http://localhost:8082/api/v1/filtration/status",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "filtration", "status"]
         }
       },
@@ -226,10 +211,10 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:8080/api/v1/devices",
+          "raw": "http://localhost:8082/api/v1/devices",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "devices"]
         }
       },
@@ -241,10 +226,10 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:8080/api/v1/stats",
+          "raw": "http://localhost:8082/api/v1/stats",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "stats"]
         }
       },
@@ -265,10 +250,10 @@
           "raw": "{\n  \"filter_mode\": \"drinking_water\",\n  \"flow\": 2.5,\n  \"ph\": 7.2,\n  \"turbidity\": 1.5,\n  \"tds\": 250.0\n}"
         },
         "url": {
-          "raw": "http://localhost:8080/api/v1/sensors/data",
+          "raw": "http://localhost:8082/api/v1/sensors/data",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "sensors", "data"]
         }
       },
@@ -289,10 +274,10 @@
           "raw": "{\n  \"filter_mode\": \"household_water\",\n  \"flow\": 1.0,\n  \"ph\": 9.1,\n  \"turbidity\": 6.2,\n  \"tds\": 580.0\n}"
         },
         "url": {
-          "raw": "http://localhost:8080/api/v1/sensors/data",
+          "raw": "http://localhost:8082/api/v1/sensors/data",
           "protocol": "http",
           "host": ["localhost"],
-          "port": "8080",
+          "port": "8082",
           "path": ["api", "v1", "sensors", "data"]
         }
       },
