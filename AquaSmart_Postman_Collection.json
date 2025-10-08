@@ -297,6 +297,21 @@
         }
       },
       "response": []
+    },
+    {
+      "name": "Get Best Daily Values (Today)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8082/api/v1/sensors/best-daily",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8082",
+          "path": ["api", "v1", "sensors", "best-daily"]
+        }
+      },
+      "response": []
     }
   ]
 }
