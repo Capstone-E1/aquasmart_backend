@@ -28,6 +28,11 @@ type DataStore interface {
 	UpdateFiltrationProgress(currentFlowRate float64)
 	StartFiltrationProcess(mode models.FilterMode, targetVolume float64)
 	CompleteFiltrationProcess()
+	ClearFiltrationProcess()  // Force clear any filtration process
 	CanChangeFilterMode() (bool, string)
 	ClearCompletedProcess()
+
+	// LED control commands
+	SetLEDCommand(string)
+	GetLEDCommand() string
 }

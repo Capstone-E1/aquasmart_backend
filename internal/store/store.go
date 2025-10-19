@@ -2,6 +2,7 @@ package store
 
 import (
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ func NewStore(maxReadings int) *Store {
 		latestReading:     nil,
 		latestByMode:      make(map[models.FilterMode]*models.SensorReading),
 		currentFilterMode: models.FilterModeDrinking, // Default to drinking water mode
+		ledCommand:        "OFF",                     // Default LED is OFF
 		maxReadings:       maxReadings,
 	}
 }
@@ -362,4 +364,20 @@ func (s *Store) ClearFiltrationProcess() {
 	defer s.mu.Unlock()
 
 	s.filtrationProcess = nil
+}
+
+// SetLEDCommand sets the LED command for STM32 to poll
+func (s *Store) SetLEDCommand(command string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.ledCommand = strings.ToUpper(command)
+}
+
+// GetLEDCommand retrieves the current LED command
+func (s *Store) GetLEDCommand() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.ledCommand
 }
