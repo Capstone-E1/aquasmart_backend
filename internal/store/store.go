@@ -16,6 +16,7 @@ type Store struct {
 	latestByMode            map[models.FilterMode]*models.SensorReading // Latest reading per filter mode
 	currentFilterMode       models.FilterMode               // Current active filter mode
 	filtrationProcess       *models.FiltrationProcess       // Current filtration process state
+	ledCommand              string                          // Current LED command (ON/OFF)
 	maxReadings             int
 }
 
