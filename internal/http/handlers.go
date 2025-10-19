@@ -7,26 +7,24 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Capstone-E1/aquasmart_backend/internal/export"
 	"github.com/Capstone-E1/aquasmart_backend/internal/models"
-	"github.com/Capstone-E1/aquasmart_backend/internal/mqtt"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
 )
 
 // Handlers contains all HTTP request handlers
 type Handlers struct {
 	store         store.DataStore
-	mqttClient    *mqtt.Client
 	exportService *export.ExportService
 }
 
 // NewHandlers creates a new handlers instance
-func NewHandlers(dataStore store.DataStore, mqttClient *mqtt.Client) *Handlers {
+func NewHandlers(dataStore store.DataStore) *Handlers {
 	return &Handlers{
 		store:         dataStore,
-		mqttClient:    mqttClient,
 		exportService: export.NewExportService(),
 	}
 }
@@ -276,6 +274,188 @@ func (h *Handlers) AddSensorData(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// AddSTM32SensorData handles POST requests from STM32 device
+// Endpoint: POST /api/v1/sensors/stm32
+func (h *Handlers) AddSTM32SensorData(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Flow      float64 `json:"flow"`       // Flow sensor (digital)
+		Ph        float64 `json:"ph"`         // pH sensor (analog)
+		Turbidity float64 `json:"turbidity"`  // Turbidity sensor (analog)
+		TDS       float64 `json:"tds"`        // TDS sensor (analog)
+	}
+
+	// Parse request body
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		log.Printf("STM32: Failed to parse request: %v", err)
+		h.sendErrorResponse(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Get current filter mode from store (set by SetFilterMode endpoint or default)
+	filterMode := h.store.GetCurrentFilterMode()
+
+	// Create sensor reading
+	reading := models.SensorReading{
+		Timestamp:  time.Now(),
+		FilterMode: filterMode,
+		Flow:       request.Flow,
+		Ph:         request.Ph,
+		Turbidity:  request.Turbidity,
+		TDS:        request.TDS,
+	}
+
+	// Store the reading
+	h.store.AddSensorReading(reading)
+
+	log.Printf("📡 STM32: Received sensor data - Flow: %.2f, pH: %.2f, Turbidity: %.2f, TDS: %.2f", 
+		request.Flow, request.Ph, request.Turbidity, request.TDS)
+
+	// Return success response
+	response := APIResponse{
+		Success: true,
+		Message: "Data received",
+		Data: map[string]interface{}{
+			"timestamp":   reading.Timestamp,
+			"filter_mode": filterMode,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetSTM32Command handles GET requests from STM32 to receive commands
+// Endpoint: GET /api/v1/sensors/stm32/command
+func (h *Handlers) GetSTM32Command(w http.ResponseWriter, r *http.Request) {
+	// Get current filter mode from store (set by SetFilterMode endpoint)
+	filterMode := h.store.GetCurrentFilterMode()
+
+	// Get filtration process if any
+	process, processExists := h.store.GetFiltrationProcess()
+
+	// Prepare command response
+	commandData := map[string]interface{}{
+		"filter_mode": filterMode,
+		"timestamp":   time.Now(),
+	}
+
+	if processExists {
+		commandData["filtration_active"] = process.State == models.FiltrationStateProcessing
+		commandData["filtration_state"] = process.State
+		commandData["target_volume"] = process.TargetVolume
+		commandData["processed_volume"] = process.ProcessedVolume
+	} else {
+		commandData["filtration_active"] = false
+	}
+
+	response := APIResponse{
+		Success: true,
+		Data:    commandData,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetSTM32FilterModeSimple returns ONLY the filter mode as plain text
+// This is simpler for STM32 to parse - no JSON, just the mode string
+// Endpoint: GET /api/v1/sensors/stm32/mode
+func (h *Handlers) GetSTM32FilterModeSimple(w http.ResponseWriter, r *http.Request) {
+	// Get current filter mode from store
+	filterMode := h.store.GetCurrentFilterMode()
+	
+	// Return as plain text (not JSON)
+	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Connection", "close")
+	w.Header().Set("Content-Length", strconv.Itoa(len(filterMode)))
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(filterMode))
+	
+	log.Printf("📤 STM32: Sent simple filter mode: %s", filterMode)
+}
+
+// GetSTM32LEDStatus returns LED status based on filter mode
+// Returns: "ON" for drinking_water, "OFF" for household_water (PLAIN TEXT ONLY)
+// LED is active-low: drinking_water = LED ON, household_water = LED OFF
+// Endpoint: GET /api/v1/sensors/stm32/led
+func (h *Handlers) GetSTM32LEDStatus(w http.ResponseWriter, r *http.Request) {
+	// Get current filter mode from store
+	filterMode := h.store.GetCurrentFilterMode()
+	
+	// Convert to LED status
+	var ledStatus string
+	if filterMode == "drinking_water" {
+		ledStatus = "ON"
+	} else {
+		ledStatus = "OFF"
+	}
+	
+	// Return as plain text (not JSON) with explicit Content-Length for microcontroller parsers
+	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Connection", "close")
+	w.Header().Set("Content-Length", strconv.Itoa(len(ledStatus)))
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(ledStatus))
+	
+	log.Printf("📤 STM32 LED: Sent status: %s (filter_mode: %s)", ledStatus, filterMode)
+}
+
+// ControlLED handles POST requests to control STM32 LED (ON/OFF)
+// Endpoint: POST /api/v1/control/led
+func (h *Handlers) ControlLED(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Action string `json:"action"` // "on" or "off"
+	}
+
+	// Parse request body
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		h.sendErrorResponse(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate action
+	action := strings.ToLower(request.Action)
+	if action != "on" && action != "off" {
+		h.sendErrorResponse(w, "Invalid action. Use 'on' or 'off'", http.StatusBadRequest)
+		return
+	}
+
+	// Store the LED command for STM32 to poll
+	// We'll use a simple in-memory variable (you can enhance this with a proper command queue)
+	h.store.SetLEDCommand(action)
+
+	log.Printf("💡 LED Control: Command received - %s", strings.ToUpper(action))
+
+	// Return success response
+	response := APIResponse{
+		Success: true,
+		Message: fmt.Sprintf("LED turned %s successfully", action),
+		Data: map[string]interface{}{
+			"led_status": strings.ToUpper(action),
+			"timestamp":  time.Now(),
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetLEDCommand returns the current LED command for STM32 to poll
+// Endpoint: GET /api/v1/control/led/command
+func (h *Handlers) GetLEDCommand(w http.ResponseWriter, r *http.Request) {
+	// Get LED command from store
+	ledCommand := h.store.GetLEDCommand()
+
+	// Return as plain text for easy STM32 parsing
+	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Connection", "close")
+	w.Header().Set("Content-Length", strconv.Itoa(len(ledCommand)))
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(ledCommand))
+
+	log.Printf("📤 STM32 LED Command: Sent - %s", ledCommand)
+}
+
 // SetFilterMode handles POST requests to set the water filter mode
 func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 	var request struct {
@@ -332,38 +512,41 @@ func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If forced or process can be interrupted, handle the transition
+	// If forced, handle the transition (override CanInterrupt check for testing)
 	if !canChange && request.Force {
-		// Check if current process can be interrupted
-		if process, exists := h.store.GetFiltrationProcess(); exists && !process.CanInterrupt {
-			h.sendErrorResponse(w, "Current filtration process cannot be interrupted", http.StatusConflict)
-			return
-		}
-
-		// Set process to switching state
+		log.Printf("⚠️  Force flag enabled - interrupting filtration process")
+		
+		// Set process to switching state or clear it
 		if process, exists := h.store.GetFiltrationProcess(); exists {
-			process.State = models.FiltrationStateSwitching
-			h.store.SetFiltrationProcess(process)
+			// Check if process naturally allows interruption
+			if process.CanInterrupt {
+				log.Printf("   Process can be interrupted naturally (progress: %.1f%%)", process.Progress)
+				process.State = models.FiltrationStateSwitching
+				h.store.SetFiltrationProcess(process)
+			} else {
+				// Force override - clear the filtration process entirely
+				log.Printf("   Force override: clearing filtration process (progress: %.1f%%)", process.Progress)
+				h.store.ClearFiltrationProcess()
+			}
 		}
 	}
 
 	// Update current filter mode in store
 	h.store.SetCurrentFilterMode(request.Mode)
 
-	// Send command via MQTT (optional - skip if MQTT not connected)
-	if h.mqttClient.IsConnected() {
-		if err := h.mqttClient.PublishFilterCommand(filterCommand); err != nil {
-			log.Printf("⚠️  Warning: Failed to send MQTT command: %v", err)
-		}
-	} else {
-		log.Printf("ℹ️  MQTT not connected, filter mode change processed locally only")
+	// Note: With HTTP-only communication, STM32 will poll for commands via GET /api/v1/sensors/stm32/command
+	log.Printf("✅ Filter mode changed to %s (STM32 will poll for this command)", request.Mode)
+
+	// Optional: Start filtration process only if start_filtration flag is true
+	var startFiltration bool = false // Default: don't start filtration automatically
+	
+	if startFiltration {
+		// Determine target volume based on mode (both set to 5L for now)
+		var targetVolume float64 = 5.0 // 5L for both drinking and household water
+		// Start new filtration process
+		h.store.StartFiltrationProcess(request.Mode, targetVolume)
+		log.Printf("🌊 Started filtration process: mode=%s, target=%.1fL", request.Mode, targetVolume)
 	}
-
-	// Determine target volume based on mode (both set to 5L for now)
-	var targetVolume float64 = 5.0 // 5L for both drinking and household water
-
-	// Start new filtration process
-	h.store.StartFiltrationProcess(request.Mode, targetVolume)
 
 	// Return success response
 	responseData := map[string]interface{}{
