@@ -54,8 +54,8 @@ func (s *Store) AddSensorReading(reading models.SensorReading) {
 	readingCopy := reading
 	s.latestByMode[reading.FilterMode] = &readingCopy
 
-	// Update current filter mode based on the reading
-	s.currentFilterMode = reading.FilterMode
+	// Note: Do NOT update currentFilterMode here - it should only be set via SetCurrentFilterMode()
+	// This allows manual filter mode changes via API to persist even when sensor data arrives
 }
 
 // GetLatestReading returns the most recent reading
@@ -353,4 +353,12 @@ func (s *Store) ClearCompletedProcess() {
 	if s.filtrationProcess != nil && s.filtrationProcess.State == models.FiltrationStateCompleted {
 		s.filtrationProcess = nil
 	}
+}
+
+// ClearFiltrationProcess force clears any filtration process (for testing/force mode changes)
+func (s *Store) ClearFiltrationProcess() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.filtrationProcess = nil
 }
