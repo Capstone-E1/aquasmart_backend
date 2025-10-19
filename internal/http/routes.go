@@ -4,13 +4,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/Capstone-E1/aquasmart_backend/internal/mqtt"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
 	"github.com/Capstone-E1/aquasmart_backend/internal/ws"
 )
 
 // SetupRoutes configures all HTTP routes for the water purification API
-func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, mqttClient *mqtt.Client) *chi.Mux {
+func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -29,8 +28,8 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, mqttClient *mqtt.Clie
 		MaxAge:           300,
 	}))
 
-	// Create handlers
-	handlers := NewHandlers(dataStore, mqttClient)
+	// Create handlers (HTTP-only, no MQTT)
+	handlers := NewHandlers(dataStore)
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
@@ -68,11 +67,23 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, mqttClient *mqtt.Clie
 
 			// Worst daily values for today
 			r.Get("/worst-daily", handlers.GetWorstDailyValues)
+
+			// STM32 specific endpoints
+			r.Post("/stm32", handlers.AddSTM32SensorData)          // POST data from STM32
+			r.Get("/stm32/command", handlers.GetSTM32Command)      // GET commands for STM32
+			r.Get("/stm32/mode", handlers.GetSTM32FilterModeSimple) // Simple text-only filter mode
+			r.Get("/stm32/led", handlers.GetSTM32LEDStatus)        // Simple LED status: ON or OFF
 		})
 
 		// Command routes for filter control
 		r.Route("/commands", func(r chi.Router) {
 			r.Post("/filter", handlers.SetFilterMode)
+		})
+
+		// Control routes for LED and other devices
+		r.Route("/control", func(r chi.Router) {
+			r.Post("/led", handlers.ControlLED)              // POST to control LED (on/off)
+			r.Get("/led/command", handlers.GetLEDCommand)    // GET LED command for STM32 polling
 		})
 
 		// Export routes for data history
