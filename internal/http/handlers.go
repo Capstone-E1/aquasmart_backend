@@ -374,35 +374,26 @@ func (h *Handlers) GetSTM32FilterModeSimple(w http.ResponseWriter, r *http.Reque
 	log.Printf("📤 STM32: Sent simple filter mode: %s", filterMode)
 }
 
-// GetSTM32LEDStatus returns LED status based on filter mode
-// Returns: "ON" for drinking_water, "OFF" for household_water (PLAIN TEXT ONLY)
-// LED is active-low: drinking_water = LED ON, household_water = LED OFF
+// GetSTM32LEDStatus returns LED command for ESP32/STM32 to poll
+// Returns: "ON" or "OFF" (PLAIN TEXT ONLY)
 // Endpoint: GET /api/v1/sensors/stm32/led
 func (h *Handlers) GetSTM32LEDStatus(w http.ResponseWriter, r *http.Request) {
-	// Get current filter mode from store
-	filterMode := h.store.GetCurrentFilterMode()
-	
-	// Convert to LED status
-	var ledStatus string
-	if filterMode == "drinking_water" {
-		ledStatus = "ON"
-	} else {
-		ledStatus = "OFF"
-	}
+	// Get LED command from store (set by POST /api/v1/sensors/stm32/led)
+	ledCommand := h.store.GetLEDCommand()
 	
 	// Return as plain text (not JSON) with explicit Content-Length for microcontroller parsers
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Connection", "close")
-	w.Header().Set("Content-Length", strconv.Itoa(len(ledStatus)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(ledCommand)))
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(ledStatus))
+	w.Write([]byte(ledCommand))
 	
-	log.Printf("📤 STM32 LED: Sent status: %s (filter_mode: %s)", ledStatus, filterMode)
+	log.Printf("📤 ESP32 LED: Sent command: %s", ledCommand)
 }
 
-// ControlLED handles POST requests to control STM32 LED (ON/OFF)
-// Endpoint: POST /api/v1/control/led
-func (h *Handlers) ControlLED(w http.ResponseWriter, r *http.Request) {
+// SetLEDCommand handles POST requests to control ESP32/STM32 LED (ON/OFF)
+// Endpoint: POST /api/v1/sensors/stm32/led
+func (h *Handlers) SetLEDCommand(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		Action string `json:"action"` // "on" or "off"
 	}
@@ -420,40 +411,23 @@ func (h *Handlers) ControlLED(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store the LED command for STM32 to poll
-	// We'll use a simple in-memory variable (you can enhance this with a proper command queue)
+	// Store the LED command for ESP32/STM32 to poll via GET /api/v1/sensors/stm32/led
 	h.store.SetLEDCommand(action)
 
-	log.Printf("💡 LED Control: Command received - %s", strings.ToUpper(action))
+	log.Printf("💡 LED Control: Command set - %s (ESP32 will poll this)", strings.ToUpper(action))
 
 	// Return success response
 	response := APIResponse{
 		Success: true,
 		Message: fmt.Sprintf("LED turned %s successfully", action),
 		Data: map[string]interface{}{
-			"led_status": strings.ToUpper(action),
-			"timestamp":  time.Now(),
+			"led_command": strings.ToUpper(action),
+			"timestamp":   time.Now(),
 		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
-}
-
-// GetLEDCommand returns the current LED command for STM32 to poll
-// Endpoint: GET /api/v1/control/led/command
-func (h *Handlers) GetLEDCommand(w http.ResponseWriter, r *http.Request) {
-	// Get LED command from store
-	ledCommand := h.store.GetLEDCommand()
-
-	// Return as plain text for easy STM32 parsing
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Connection", "close")
-	w.Header().Set("Content-Length", strconv.Itoa(len(ledCommand)))
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(ledCommand))
-
-	log.Printf("📤 STM32 LED Command: Sent - %s", ledCommand)
 }
 
 // SetFilterMode handles POST requests to set the water filter mode
