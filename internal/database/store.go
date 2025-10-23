@@ -437,3 +437,16 @@ func (s *DatabaseStore) GetActiveDevices() []string {
 	
 	return devices
 }
+
+// SetLEDCommand sets the LED command (stored in memory, not in database for simplicity)
+// For production, you might want to store this in a commands table
+var ledCommand string = "OFF"
+
+func (s *DatabaseStore) SetLEDCommand(command string) {
+	ledCommand = command
+}
+
+// GetLEDCommand retrieves the current LED command
+func (s *DatabaseStore) GetLEDCommand() string {
+	return ledCommand
+}
