@@ -484,6 +484,77 @@
       ]
     },
     {
+      "name": "LED Control (ESP32/STM32)",
+      "item": [
+        {
+          "name": "Turn LED ON",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"on\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/stm32/led",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "stm32", "led"]
+            },
+            "description": "Set LED command to ON. ESP32 will poll GET /api/v1/sensors/stm32/led and receive 'ON'"
+          },
+          "response": []
+        },
+        {
+          "name": "Turn LED OFF",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"off\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/stm32/led",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "stm32", "led"]
+            },
+            "description": "Set LED command to OFF. ESP32 will poll GET /api/v1/sensors/stm32/led and receive 'OFF'"
+          },
+          "response": []
+        },
+        {
+          "name": "Get LED Command (ESP32 Polling Endpoint)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/stm32/led",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "stm32", "led"]
+            },
+            "description": "ESP32 polls this endpoint every 1-2 seconds to get LED command (returns plain text: ON or OFF)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Export Data Endpoints",
       "item": [
         {
