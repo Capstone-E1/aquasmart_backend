@@ -15,6 +15,7 @@ type Store struct {
 	sensorReadings          []models.SensorReading
 	latestReading           *models.SensorReading           // Latest reading overall
 	latestByMode            map[models.FilterMode]*models.SensorReading // Latest reading per filter mode
+	latestByDevice          map[string]*models.SensorReading // Latest reading per device
 	currentFilterMode       models.FilterMode               // Current active filter mode
 	filtrationProcess       *models.FiltrationProcess       // Current filtration process state
 	ledCommand              string                          // Current LED command (ON/OFF)
@@ -31,6 +32,7 @@ func NewStore(maxReadings int) *Store {
 		sensorReadings:    make([]models.SensorReading, 0, maxReadings),
 		latestReading:     nil,
 		latestByMode:      make(map[models.FilterMode]*models.SensorReading),
+		latestByDevice:    make(map[string]*models.SensorReading),
 		currentFilterMode: models.FilterModeDrinking, // Default to drinking water mode
 		ledCommand:        "OFF",                     // Default LED is OFF
 		maxReadings:       maxReadings,
@@ -56,6 +58,12 @@ func (s *Store) AddSensorReading(reading models.SensorReading) {
 	// Update latest reading for this filter mode
 	readingCopy := reading
 	s.latestByMode[reading.FilterMode] = &readingCopy
+
+	// Update latest reading for this device
+	if reading.DeviceID != "" {
+		deviceCopy := reading
+		s.latestByDevice[reading.DeviceID] = &deviceCopy
+	}
 
 	// Note: Do NOT update currentFilterMode here - it should only be set via SetCurrentFilterMode()
 	// This allows manual filter mode changes via API to persist even when sensor data arrives
@@ -145,6 +153,35 @@ func (s *Store) GetLatestReadingByMode(mode models.FilterMode) (*models.SensorRe
 	return &readingCopy, true
 }
 
+// GetLatestReadingByDevice returns the most recent reading for a specific device
+func (s *Store) GetLatestReadingByDevice(deviceID string) (*models.SensorReading, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	reading, exists := s.latestByDevice[deviceID]
+	if !exists || reading == nil {
+		return nil, false
+	}
+
+	// Return a copy to avoid race conditions
+	readingCopy := *reading
+	return &readingCopy, true
+}
+
+// GetAllLatestReadingsByDevice returns the latest reading for each device
+func (s *Store) GetAllLatestReadingsByDevice() map[string]models.SensorReading {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make(map[string]models.SensorReading)
+	for deviceID, reading := range s.latestByDevice {
+		if reading != nil {
+			result[deviceID] = *reading
+		}
+	}
+	return result
+}
+
 // GetCurrentFilterMode returns the current active filter mode
 func (s *Store) GetCurrentFilterMode() models.FilterMode {
 	s.mu.RLock()
@@ -190,6 +227,52 @@ func (s *Store) GetRecentReadingsByMode(mode models.FilterMode, limit int) []mod
 	var readings []models.SensorReading
 	for _, reading := range s.sensorReadings {
 		if reading.FilterMode == mode {
+			readings = append(readings, reading)
+		}
+	}
+
+	// Sort by timestamp descending (most recent first)
+	sort.Slice(readings, func(i, j int) bool {
+		return readings[i].Timestamp.After(readings[j].Timestamp)
+	})
+
+	// Limit results
+	if limit > 0 && len(readings) > limit {
+		readings = readings[:limit]
+	}
+
+	return readings
+}
+
+// GetReadingsByDevice returns all readings for a specific device
+func (s *Store) GetReadingsByDevice(deviceID string) []models.SensorReading {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []models.SensorReading
+	for _, reading := range s.sensorReadings {
+		if reading.DeviceID == deviceID {
+			result = append(result, reading)
+		}
+	}
+
+	// Sort by timestamp
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Timestamp.Before(result[j].Timestamp)
+	})
+
+	return result
+}
+
+// GetRecentReadingsByDevice returns the most recent N readings for a specific device
+func (s *Store) GetRecentReadingsByDevice(deviceID string, limit int) []models.SensorReading {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Filter readings by device
+	var readings []models.SensorReading
+	for _, reading := range s.sensorReadings {
+		if reading.DeviceID == deviceID {
 			readings = append(readings, reading)
 		}
 	}

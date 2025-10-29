@@ -10,9 +10,13 @@ type DataStore interface {
 	AddSensorReading(models.SensorReading)
 	GetLatestReading() (*models.SensorReading, bool)
 	GetLatestReadingByMode(models.FilterMode) (*models.SensorReading, bool)
+	GetLatestReadingByDevice(string) (*models.SensorReading, bool)
 	GetAllLatestReadings() []models.SensorReading
+	GetAllLatestReadingsByDevice() map[string]models.SensorReading
 	GetRecentReadings(int) []models.SensorReading
 	GetRecentReadingsByMode(models.FilterMode, int) []models.SensorReading
+	GetRecentReadingsByDevice(string, int) []models.SensorReading
+	GetReadingsByDevice(string) []models.SensorReading
 	GetReadingsInRange(time.Time, time.Time) []models.SensorReading
 	GetReadingCount() int
 	GetActiveDevices() []string
