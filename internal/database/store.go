@@ -107,6 +107,62 @@ func (s *DatabaseStore) GetLatestReadingByMode(mode models.FilterMode) (*models.
 	return &reading, true
 }
 
+// GetLatestReadingByDevice returns the most recent reading for a specific device
+func (s *DatabaseStore) GetLatestReadingByDevice(deviceID string) (*models.SensorReading, bool) {
+	query := `
+		SELECT device_id, timestamp, filter_mode, flow, ph, turbidity, tds
+		FROM sensor_readings
+		WHERE device_id = $1
+		ORDER BY timestamp DESC
+		LIMIT 1`
+
+	var reading models.SensorReading
+	err := s.db.QueryRow(query, deviceID).Scan(
+		&reading.DeviceID, &reading.Timestamp, &reading.FilterMode, &reading.Flow,
+		&reading.Ph, &reading.Turbidity, &reading.TDS)
+
+	if err == sql.ErrNoRows {
+		return nil, false
+	}
+	if err != nil {
+		log.Printf("❌ Error getting latest reading by device: %v", err)
+		return nil, false
+	}
+
+	return &reading, true
+}
+
+// GetAllLatestReadingsByDevice returns the latest reading for each device
+func (s *DatabaseStore) GetAllLatestReadingsByDevice() map[string]models.SensorReading {
+	query := `
+		SELECT DISTINCT ON (device_id)
+			device_id, timestamp, filter_mode, flow, ph, turbidity, tds
+		FROM sensor_readings
+		ORDER BY device_id, timestamp DESC`
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		log.Printf("❌ Error getting all latest readings by device: %v", err)
+		return map[string]models.SensorReading{}
+	}
+	defer rows.Close()
+
+	result := make(map[string]models.SensorReading)
+	for rows.Next() {
+		var reading models.SensorReading
+		err := rows.Scan(
+			&reading.DeviceID, &reading.Timestamp, &reading.FilterMode, &reading.Flow,
+			&reading.Ph, &reading.Turbidity, &reading.TDS)
+		if err != nil {
+			log.Printf("⚠️  Warning: Error scanning reading: %v", err)
+			continue
+		}
+		result[reading.DeviceID] = reading
+	}
+
+	return result
+}
+
 // GetAllLatestReadings returns the latest readings for each filter mode
 func (s *DatabaseStore) GetAllLatestReadings() []models.SensorReading {
 	readings := []models.SensorReading{}
@@ -175,6 +231,73 @@ func (s *DatabaseStore) GetRecentReadingsByMode(mode models.FilterMode, limit in
 	rows, err := s.db.Query(query, string(mode), limit)
 	if err != nil {
 		log.Printf("❌ Error getting recent readings by mode: %v", err)
+		return []models.SensorReading{}
+	}
+	defer rows.Close()
+
+	var readings []models.SensorReading
+	for rows.Next() {
+		var reading models.SensorReading
+		err := rows.Scan(
+			&reading.DeviceID, &reading.Timestamp, &reading.FilterMode, &reading.Flow,
+			&reading.Ph, &reading.Turbidity, &reading.TDS)
+		if err != nil {
+			log.Printf("⚠️  Warning: Error scanning reading: %v", err)
+			continue
+		}
+		readings = append(readings, reading)
+	}
+
+	return readings
+}
+
+// GetRecentReadingsByDevice returns recent readings for a specific device
+func (s *DatabaseStore) GetRecentReadingsByDevice(deviceID string, limit int) []models.SensorReading {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := `
+		SELECT device_id, timestamp, filter_mode, flow, ph, turbidity, tds
+		FROM sensor_readings
+		WHERE device_id = $1
+		ORDER BY timestamp DESC
+		LIMIT $2`
+
+	rows, err := s.db.Query(query, deviceID, limit)
+	if err != nil {
+		log.Printf("❌ Error getting recent readings by device: %v", err)
+		return []models.SensorReading{}
+	}
+	defer rows.Close()
+
+	var readings []models.SensorReading
+	for rows.Next() {
+		var reading models.SensorReading
+		err := rows.Scan(
+			&reading.DeviceID, &reading.Timestamp, &reading.FilterMode, &reading.Flow,
+			&reading.Ph, &reading.Turbidity, &reading.TDS)
+		if err != nil {
+			log.Printf("⚠️  Warning: Error scanning reading: %v", err)
+			continue
+		}
+		readings = append(readings, reading)
+	}
+
+	return readings
+}
+
+// GetReadingsByDevice returns all readings for a specific device
+func (s *DatabaseStore) GetReadingsByDevice(deviceID string) []models.SensorReading {
+	query := `
+		SELECT device_id, timestamp, filter_mode, flow, ph, turbidity, tds
+		FROM sensor_readings
+		WHERE device_id = $1
+		ORDER BY timestamp DESC`
+
+	rows, err := s.db.Query(query, deviceID)
+	if err != nil {
+		log.Printf("❌ Error getting readings by device: %v", err)
 		return []models.SensorReading{}
 	}
 	defer rows.Close()
@@ -329,7 +452,8 @@ func (s *DatabaseStore) GetReadingCount() int {
 // GetCurrentFilterMode returns the current filter mode setting
 func (s *DatabaseStore) GetCurrentFilterMode() models.FilterMode {
 	var filterMode string
-	query := `SELECT current_filter_mode FROM device_status WHERE device_id = 'stm32_main' LIMIT 1`
+	// Try to get from any device in the system (prioritize most recent update)
+	query := `SELECT current_filter_mode FROM device_status ORDER BY updated_at DESC LIMIT 1`
 	
 	err := s.db.QueryRow(query).Scan(&filterMode)
 	if err != nil {
@@ -340,24 +464,25 @@ func (s *DatabaseStore) GetCurrentFilterMode() models.FilterMode {
 	return models.FilterMode(filterMode)
 }
 
-// SetCurrentFilterMode sets the current filter mode
+// SetCurrentFilterMode sets the current filter mode for ALL devices
 func (s *DatabaseStore) SetCurrentFilterMode(mode models.FilterMode) {
-	log.Printf("Setting filter mode to: %s", mode)
+	log.Printf("Setting filter mode to: %s for all devices", mode)
 	
+	// Update filter mode for ALL devices in the system
 	query := `
-		INSERT INTO device_status (device_id, current_filter_mode, last_seen, updated_at)
-		VALUES ('stm32_main', $1, NOW(), NOW())
-		ON CONFLICT (device_id) 
-		DO UPDATE SET current_filter_mode = $1, last_seen = NOW(), updated_at = NOW()
+		UPDATE device_status 
+		SET current_filter_mode = $1, updated_at = NOW()
+		WHERE device_id IN ('stm32_main', 'stm32_pre', 'stm32_post')
 	`
 	
-	_, err := s.db.Exec(query, string(mode))
+	result, err := s.db.Exec(query, string(mode))
 	if err != nil {
 		log.Printf("❌ Failed to set filter mode in database: %v", err)
 		return
 	}
 	
-	log.Printf("✅ Filter mode changed to %s (STM32 will poll for this command)", mode)
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("✅ Filter mode changed to %s for %d devices", mode, rowsAffected)
 }
 
 // GetWaterQualityStatus returns water quality assessment for latest reading
