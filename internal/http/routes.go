@@ -68,14 +68,17 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub) *chi.Mux {
 			// Worst daily values for today
 			r.Get("/worst-daily", handlers.GetWorstDailyValues)
 
+			// Device-specific routes
+			r.Get("/devices/latest", handlers.GetAllDevicesLatest)  // Get latest reading for all devices
+			r.Get("/devices/{deviceID}", handlers.GetDeviceReadings) // Get all readings for a specific device
 
-		// STM32/ESP32 specific endpoints
-		r.Post("/stm32", handlers.AddSTM32SensorData)           // POST data from STM32
-		r.Get("/stm32/command", handlers.GetSTM32Command)       // GET commands for STM32
-		r.Get("/stm32/mode", handlers.GetSTM32FilterModeSimple) // Simple text-only filter mode
-		r.Get("/stm32/led", handlers.GetSTM32LEDStatus)         // GET LED command: ON/OFF (for ESP32 polling)
-		r.Post("/stm32/led", handlers.SetLEDCommand)            // POST to set LED command (from Postman/Frontend)
-	})		// Command routes for filter control
+			// STM32/ESP32 specific endpoints
+			r.Post("/stm32", handlers.AddSTM32SensorData)           // POST data from STM32
+			r.Get("/stm32/command", handlers.GetSTM32Command)       // GET commands for STM32
+			r.Get("/stm32/mode", handlers.GetSTM32FilterModeSimple) // Simple text-only filter mode
+			r.Get("/stm32/led", handlers.GetSTM32LEDStatus)         // GET LED command: ON/OFF (for ESP32 polling)
+			r.Post("/stm32/led", handlers.SetLEDCommand)            // POST to set LED command (from Postman/Frontend)
+		})		// Command routes for filter control
 		r.Route("/commands", func(r chi.Router) {
 			r.Post("/filter", handlers.SetFilterMode)
 		})
