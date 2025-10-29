@@ -1,9 +1,9 @@
 {
   "info": {
     "name": "AquaSmart Backend API - Final Collection",
-    "description": "Collection lengkap untuk testing semua endpoint AquaSmart Water Purification API",
+    "description": "Collection lengkap untuk testing semua endpoint AquaSmart Water Purification API. Includes support for multiple STM32 devices (pre-filtration and post-filtration).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "version": "2.0.0"
+    "version": "3.0.0"
   },
   "item": [
     {
@@ -319,6 +319,181 @@
       ]
     },
     {
+      "name": "Device-Specific Endpoints",
+      "item": [
+        {
+          "name": "Get Latest Readings for All Devices",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/devices/latest",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "devices", "latest"]
+            },
+            "description": "Returns the latest reading for each device (stm32_pre, stm32_post)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Latest Reading by Device ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/latest?device_id=stm32_pre",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "latest"],
+              "query": [
+                {
+                  "key": "device_id",
+                  "value": "stm32_pre",
+                  "description": "Device ID: stm32_pre or stm32_post"
+                }
+              ]
+            },
+            "description": "Get the latest reading from a specific device"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Readings for Device - stm32_pre",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/devices/stm32_pre",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "devices", "stm32_pre"]
+            },
+            "description": "Get all readings from pre-filtration device (stm32_pre)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Readings for Device - stm32_post",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/devices/stm32_post",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "devices", "stm32_post"]
+            },
+            "description": "Get all readings from post-filtration device (stm32_post)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recent Readings by Device ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/recent?device_id=stm32_pre&limit=50",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "recent"],
+              "query": [
+                {
+                  "key": "device_id",
+                  "value": "stm32_pre",
+                  "description": "Device ID: stm32_pre or stm32_post"
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Number of readings to retrieve"
+                }
+              ]
+            },
+            "description": "Get recent readings from a specific device"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Sensor Data - Filter by Device",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/all?device_id=stm32_post&limit=100&sort=desc",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "all"],
+              "query": [
+                {
+                  "key": "device_id",
+                  "value": "stm32_post",
+                  "description": "Filter by device: stm32_pre or stm32_post"
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Max 100 records"
+                },
+                {
+                  "key": "sort",
+                  "value": "desc",
+                  "description": "Sort order: desc (newest first)"
+                }
+              ]
+            },
+            "description": "Get all sensor data filtered by device with pagination"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Sensor Data - Filter by Device and Mode",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/all?device_id=stm32_pre&filter_mode=drinking_water&limit=100&sort=desc",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "all"],
+              "query": [
+                {
+                  "key": "device_id",
+                  "value": "stm32_pre",
+                  "description": "Filter by device"
+                },
+                {
+                  "key": "filter_mode",
+                  "value": "drinking_water",
+                  "description": "Filter by mode: drinking_water or household_water"
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Max records"
+                },
+                {
+                  "key": "sort",
+                  "value": "desc",
+                  "description": "Sort order"
+                }
+              ]
+            },
+            "description": "Get sensor data filtered by both device and filter mode"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Daily Analysis Endpoints",
       "item": [
         {
@@ -401,6 +576,93 @@
               "port": "8080",
               "path": ["api", "v1", "sensors", "data"]
             }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "STM32 Device Data Submission",
+      "item": [
+        {
+          "name": "STM32 Pre-Filtration - Send Sensor Data",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"stm32_pre\",\n  \"flow\": 2.8,\n  \"ph\": 7.5,\n  \"turbidity\": 3.2,\n  \"tds\": 420.5\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/stm32",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "stm32"]
+            },
+            "description": "STM32 with ESP32 (pre-filtration) sends sensor data to backend"
+          },
+          "response": []
+        },
+        {
+          "name": "STM32 Post-Filtration - Send Sensor Data",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"stm32_post\",\n  \"flow\": 2.5,\n  \"ph\": 7.2,\n  \"turbidity\": 0.8,\n  \"tds\": 180.3\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/stm32",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "stm32"]
+            },
+            "description": "STM32 with ESP8266 (post-filtration) sends sensor data to backend"
+          },
+          "response": []
+        },
+        {
+          "name": "STM32 - Get Command from Backend",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/stm32/command",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "stm32", "command"]
+            },
+            "description": "STM32 polls this endpoint to get filter mode commands and filtration status"
+          },
+          "response": []
+        },
+        {
+          "name": "STM32 - Get Filter Mode (Simple Text)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/sensors/stm32/mode",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "sensors", "stm32", "mode"]
+            },
+            "description": "Returns plain text filter mode (drinking_water or household_water) - easier for STM32 to parse"
           },
           "response": []
         }
