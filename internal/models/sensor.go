@@ -64,6 +64,13 @@ func (s *SensorReading) IsPostFiltration() bool {
 
 // ValidateReading checks if sensor values are within acceptable ranges
 func (s *SensorReading) ValidateReading() bool {
+	// DeviceID must be specified and valid
+	if s.DeviceID == "" {
+		return false
+	}
+	if !s.IsValidDeviceID() {
+		return false
+	}
 	// Flow should be non-negative (L/min units)
 	if s.Flow < 0 {
 		return false
@@ -85,6 +92,12 @@ func (s *SensorReading) ValidateReading() bool {
 		return false
 	}
 	return true
+}
+
+// IsValidDeviceID checks if the device_id is one of the allowed values
+func (s *SensorReading) IsValidDeviceID() bool {
+	deviceID := strings.ToLower(s.DeviceID)
+	return deviceID == "stm32_pre" || deviceID == "stm32_post" || deviceID == "stm32_main"
 }
 
 // GetPhStatus returns the pH status based on water quality standards
