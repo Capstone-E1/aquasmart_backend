@@ -13,6 +13,7 @@ import (
 	"github.com/Capstone-E1/aquasmart_backend/internal/export"
 	"github.com/Capstone-E1/aquasmart_backend/internal/models"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 // Handlers contains all HTTP request handlers
@@ -37,9 +38,28 @@ type APIResponse struct {
 	Error   string      `json:"error,omitempty"`
 }
 
-// GetLatestReadings returns the latest sensor readings (optionally filtered by mode)
+// GetLatestReadings returns the latest sensor readings (optionally filtered by mode or device)
 func (h *Handlers) GetLatestReadings(w http.ResponseWriter, r *http.Request) {
 	filterModeStr := r.URL.Query().Get("filter_mode")
+	deviceID := r.URL.Query().Get("device_id")
+
+	// If device_id is specified, return reading for that device
+	if deviceID != "" {
+		reading, exists := h.store.GetLatestReadingByDevice(deviceID)
+		if !exists {
+			h.sendErrorResponse(w, "No sensor data available for specified device", http.StatusNotFound)
+			return
+		}
+
+		response := APIResponse{
+			Success: true,
+			Data:    reading,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	if filterModeStr != "" {
 		// Return reading for specific filter mode
@@ -117,10 +137,11 @@ func (h *Handlers) GetWaterQualityStatus(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(response)
 }
 
-// GetRecentReadings returns recent sensor readings (optionally filtered by mode)
+// GetRecentReadings returns recent sensor readings (optionally filtered by mode or device)
 func (h *Handlers) GetRecentReadings(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
 	filterModeStr := r.URL.Query().Get("filter_mode")
+	deviceID := r.URL.Query().Get("device_id")
 
 	limit := 50 // Default limit
 	if limitStr != "" {
@@ -131,7 +152,10 @@ func (h *Handlers) GetRecentReadings(w http.ResponseWriter, r *http.Request) {
 
 	var readings []models.SensorReading
 
-	if filterModeStr != "" {
+	// If device_id is specified, filter by device
+	if deviceID != "" {
+		readings = h.store.GetRecentReadingsByDevice(deviceID, limit)
+	} else if filterModeStr != "" {
 		// Return readings for specific filter mode
 		filterMode := models.FilterMode(filterModeStr)
 		if filterMode != models.FilterModeDrinking && filterMode != models.FilterModeHousehold {
@@ -278,6 +302,7 @@ func (h *Handlers) AddSensorData(w http.ResponseWriter, r *http.Request) {
 // Endpoint: POST /api/v1/sensors/stm32
 func (h *Handlers) AddSTM32SensorData(w http.ResponseWriter, r *http.Request) {
 	var request struct {
+		DeviceID  string  `json:"device_id"`  // Device identifier: stm32_pre or stm32_post
 		Flow      float64 `json:"flow"`       // Flow sensor (digital)
 		Ph        float64 `json:"ph"`         // pH sensor (analog)
 		Turbidity float64 `json:"turbidity"`  // Turbidity sensor (analog)
@@ -286,16 +311,37 @@ func (h *Handlers) AddSTM32SensorData(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		log.Printf("STM32: Failed to parse request: %v", err)
-		h.sendErrorResponse(w, "Invalid request body", http.StatusBadRequest)
+		log.Printf("❌ STM32: Failed to parse request from %s: %v", r.RemoteAddr, err)
+		h.sendErrorResponse(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Get current filter mode from store (set by SetFilterMode endpoint or default)
+	// Log received data for debugging
+	log.Printf("📥 STM32: Received request from %s - device_id: '%s', flow: %.2f, ph: %.2f, turbidity: %.2f, tds: %.2f", 
+		r.RemoteAddr, request.DeviceID, request.Flow, request.Ph, request.Turbidity, request.TDS)
+
+	// Validate device_id
+	if request.DeviceID == "" {
+		log.Printf("❌ STM32: device_id is empty from %s", r.RemoteAddr)
+		h.sendErrorResponse(w, "device_id is required", http.StatusBadRequest)
+		return
+	}
+
+	deviceIDLower := strings.ToLower(request.DeviceID)
+	if deviceIDLower != "stm32_pre" && deviceIDLower != "stm32_post" && deviceIDLower != "stm32_main" {
+		log.Printf("❌ STM32: Invalid device_id '%s' from %s", request.DeviceID, r.RemoteAddr)
+		h.sendErrorResponse(w, "Invalid device_id. Must be 'stm32_pre' or 'stm32_post'", http.StatusBadRequest)
+		return
+	}
+
+	// Get current filter mode from global setting (set by SetFilterMode endpoint)
+	// This ensures all devices use the same filter mode setting
 	filterMode := h.store.GetCurrentFilterMode()
+	log.Printf("📋 STM32 [%s]: Using global filter_mode '%s'", request.DeviceID, filterMode)
 
 	// Create sensor reading
 	reading := models.SensorReading{
+		DeviceID:   request.DeviceID,
 		Timestamp:  time.Now(),
 		FilterMode: filterMode,
 		Flow:       request.Flow,
@@ -304,17 +350,24 @@ func (h *Handlers) AddSTM32SensorData(w http.ResponseWriter, r *http.Request) {
 		TDS:        request.TDS,
 	}
 
+	// Validate the reading
+	if !reading.ValidateReading() {
+		h.sendErrorResponse(w, "Invalid sensor reading values", http.StatusBadRequest)
+		return
+	}
+
 	// Store the reading
 	h.store.AddSensorReading(reading)
 
-	log.Printf("📡 STM32: Received sensor data - Flow: %.2f, pH: %.2f, Turbidity: %.2f, TDS: %.2f", 
-		request.Flow, request.Ph, request.Turbidity, request.TDS)
+	log.Printf("📡 STM32 [%s]: Received sensor data - Flow: %.2f, pH: %.2f, Turbidity: %.2f, TDS: %.2f", 
+		request.DeviceID, request.Flow, request.Ph, request.Turbidity, request.TDS)
 
 	// Return success response
 	response := APIResponse{
 		Success: true,
 		Message: "Data received",
 		Data: map[string]interface{}{
+			"device_id":   request.DeviceID,
 			"timestamp":   reading.Timestamp,
 			"filter_mode": filterMode,
 		},
@@ -327,7 +380,8 @@ func (h *Handlers) AddSTM32SensorData(w http.ResponseWriter, r *http.Request) {
 // GetSTM32Command handles GET requests from STM32 to receive commands
 // Endpoint: GET /api/v1/sensors/stm32/command
 func (h *Handlers) GetSTM32Command(w http.ResponseWriter, r *http.Request) {
-	// Get current filter mode from store (set by SetFilterMode endpoint)
+	// Get current filter mode from global setting (set by SetFilterMode endpoint)
+	// This ensures consistency across all endpoints
 	filterMode := h.store.GetCurrentFilterMode()
 
 	// Get filtration process if any
@@ -361,7 +415,7 @@ func (h *Handlers) GetSTM32Command(w http.ResponseWriter, r *http.Request) {
 // This is simpler for STM32 to parse - no JSON, just the mode string
 // Endpoint: GET /api/v1/sensors/stm32/mode
 func (h *Handlers) GetSTM32FilterModeSimple(w http.ResponseWriter, r *http.Request) {
-	// Get current filter mode from store
+	// Get current filter mode from global setting
 	filterMode := h.store.GetCurrentFilterMode()
 	
 	// Return as plain text (not JSON)
@@ -378,21 +432,26 @@ func (h *Handlers) GetSTM32FilterModeSimple(w http.ResponseWriter, r *http.Reque
 // Returns: "ON" or "OFF" (PLAIN TEXT ONLY)
 // Endpoint: GET /api/v1/sensors/stm32/led
 func (h *Handlers) GetSTM32LEDStatus(w http.ResponseWriter, r *http.Request) {
-	// Get LED command from store (set by POST /api/v1/sensors/stm32/led)
-	ledCommand := h.store.GetLEDCommand()
-	
+	// Derive LED state from GLOBAL filter mode:
+	// ON  -> drinking_water
+	// OFF -> household_water
+	filterMode := h.store.GetCurrentFilterMode()
+
+	ledText := "OFF"
+	if filterMode == models.FilterModeDrinking {
+		ledText = "ON"
+	}
+
 	// Return as plain text (not JSON) with explicit Content-Length for microcontroller parsers
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Connection", "close")
-	w.Header().Set("Content-Length", strconv.Itoa(len(ledCommand)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(ledText)))
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(ledCommand))
-	
-	log.Printf("📤 ESP32 LED: Sent command: %s", ledCommand)
+	w.Write([]byte(ledText))
+
+	log.Printf("📤 ESP32 LED: Sent command: %s (derived from filter_mode=%s)", ledText, filterMode)
 }
 
-// SetLEDCommand handles POST requests to control ESP32/STM32 LED (ON/OFF)
-// Endpoint: POST /api/v1/sensors/stm32/led
 func (h *Handlers) SetLEDCommand(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		Action string `json:"action"` // "on" or "off"
@@ -770,6 +829,7 @@ func (h *Handlers) GetAllSensorData(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
 	filterModeStr := r.URL.Query().Get("filter_mode")
+	deviceID := r.URL.Query().Get("device_id")
 	sortOrder := r.URL.Query().Get("sort") // "asc" or "desc"
 
 	// Set default values
@@ -794,8 +854,19 @@ func (h *Handlers) GetAllSensorData(w http.ResponseWriter, r *http.Request) {
 	// Get all readings
 	allReadings := h.store.GetRecentReadings(10000) // Get a large number to simulate "all"
 
-	// Filter by mode if specified
+	// Filter by device if specified
 	var filteredReadings []models.SensorReading
+	if deviceID != "" {
+		for _, reading := range allReadings {
+			if reading.DeviceID == deviceID {
+				filteredReadings = append(filteredReadings, reading)
+			}
+		}
+		allReadings = filteredReadings
+		filteredReadings = []models.SensorReading{} // Reset for mode filtering
+	}
+
+	// Filter by mode if specified
 	if filterModeStr != "" {
 		filterMode := models.FilterMode(filterModeStr)
 		if filterMode != models.FilterModeDrinking && filterMode != models.FilterModeHousehold {
@@ -851,6 +922,7 @@ func (h *Handlers) GetAllSensorData(w http.ResponseWriter, r *http.Request) {
 			"has_previous":     offset > 0,
 		},
 		"filters": map[string]interface{}{
+			"device_id":   deviceID,
 			"filter_mode": filterModeStr,
 			"sort_order":  sortOrder,
 		},
@@ -859,6 +931,50 @@ func (h *Handlers) GetAllSensorData(w http.ResponseWriter, r *http.Request) {
 	response := APIResponse{
 		Success: true,
 		Data:    responseData,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetDeviceReadings returns all readings for a specific device (path parameter)
+func (h *Handlers) GetDeviceReadings(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "deviceID")
+	
+	if deviceID == "" {
+		h.sendErrorResponse(w, "device_id parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	// Get readings for this device
+	readings := h.store.GetReadingsByDevice(deviceID)
+
+	if len(readings) == 0 {
+		h.sendErrorResponse(w, "No readings found for device: "+deviceID, http.StatusNotFound)
+		return
+	}
+
+	response := APIResponse{
+		Success: true,
+		Data:    readings,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetAllDevicesLatest returns the latest reading for each device
+func (h *Handlers) GetAllDevicesLatest(w http.ResponseWriter, r *http.Request) {
+	latestReadings := h.store.GetAllLatestReadingsByDevice()
+
+	if len(latestReadings) == 0 {
+		h.sendErrorResponse(w, "No devices with readings found", http.StatusNotFound)
+		return
+	}
+
+	response := APIResponse{
+		Success: true,
+		Data:    latestReadings,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
