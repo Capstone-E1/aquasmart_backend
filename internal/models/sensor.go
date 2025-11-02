@@ -11,10 +11,40 @@ type SensorReading struct {
 	DeviceID   string     `json:"device_id"`
 	Timestamp  time.Time  `json:"timestamp"`
 	FilterMode FilterMode `json:"filter_mode"`
-	Flow       float64    `json:"flow"`
-	Ph         float64    `json:"ph"`
-	Turbidity  float64    `json:"turbidity"`
-	TDS        float64    `json:"tds"`
+	Flow       float64    `json:"flow"`      
+	Ph         float64    `json:"ph"`        
+	Turbidity  float64    `json:"turbidity"` 
+	TDS        float64    `json:"tds"`       
+}
+
+func ConvertVoltageToTurbidity(voltage float64) float64 {
+	if voltage < 0 {
+		return 0
+	}
+	if voltage > 3.0 {
+		voltage = 3.0
+	}
+	return (voltage / 3.0) * 1000.0
+}
+
+func ConvertVoltageToTDS(voltage float64) float64 {
+	if voltage < 0 {
+		return 0
+	}
+	if voltage > 2.3 {
+		voltage = 2.3
+	}
+	return (voltage / 2.3) * 1000.0
+}
+
+func ConvertVoltageToPh(voltage float64) float64 {
+	if voltage < 0 {
+		return 0
+	}
+	if voltage > 3.3 {
+		voltage = 3.3
+	}
+	return (voltage / 3.3) * 14.0
 }
 
 // SensorData represents the raw JSON structure received from the device
@@ -75,16 +105,16 @@ func (s *SensorReading) ValidateReading() bool {
 	if s.Flow < 0 {
 		return false
 	}
-	// Ph should be between 0-14
+	// Ph should be between 0-14 (pH scale)
 	if s.Ph < 0 || s.Ph > 14 {
 		return false
 	}
-	// Turbidity should be non-negative (NTU units)
-	if s.Turbidity < 0 {
+	// Turbidity should be between 0-1000 NTU
+	if s.Turbidity < 0 || s.Turbidity > 1000 {
 		return false
 	}
-	// TDS should be non-negative (ppm units)
-	if s.TDS < 0 {
+	// TDS should be between 0-1000 PPM
+	if s.TDS < 0 || s.TDS > 1000 {
 		return false
 	}
 	// FilterMode should be valid
