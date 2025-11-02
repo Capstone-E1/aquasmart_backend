@@ -316,8 +316,8 @@ func (h *Handlers) AddSTM32SensorData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log received data for debugging
-	log.Printf("📥 STM32: Received request from %s - device_id: '%s', flow: %.2f, ph: %.2f, turbidity: %.2f, tds: %.2f", 
+	// Log received data for debugging (raw voltage values)
+	log.Printf("📥 STM32: Received request from %s - device_id: '%s', flow: %.2f, ph_voltage: %.2fV, turbidity_voltage: %.2fV, tds_voltage: %.2fV", 
 		r.RemoteAddr, request.DeviceID, request.Flow, request.Ph, request.Turbidity, request.TDS)
 
 	// Validate device_id
@@ -339,15 +339,21 @@ func (h *Handlers) AddSTM32SensorData(w http.ResponseWriter, r *http.Request) {
 	filterMode := h.store.GetCurrentFilterMode()
 	log.Printf("📋 STM32 [%s]: Using global filter_mode '%s'", request.DeviceID, filterMode)
 
-	// Create sensor reading
+	phValue := models.ConvertVoltageToPh(request.Ph)
+	turbidityValue := models.ConvertVoltageToTurbidity(request.Turbidity)
+	tdsValue := models.ConvertVoltageToTDS(request.TDS)
+	
+	log.Printf("🔄 STM32 [%s]: Converted values - pH: %.2f, Turbidity: %.2f NTU, TDS: %.2f PPM", 
+		request.DeviceID, phValue, turbidityValue, tdsValue)
+
 	reading := models.SensorReading{
 		DeviceID:   request.DeviceID,
 		Timestamp:  time.Now(),
 		FilterMode: filterMode,
 		Flow:       request.Flow,
-		Ph:         request.Ph,
-		Turbidity:  request.Turbidity,
-		TDS:        request.TDS,
+		Ph:         phValue,
+		Turbidity:  turbidityValue,
+		TDS:        tdsValue,
 	}
 
 	// Validate the reading
@@ -359,8 +365,8 @@ func (h *Handlers) AddSTM32SensorData(w http.ResponseWriter, r *http.Request) {
 	// Store the reading
 	h.store.AddSensorReading(reading)
 
-	log.Printf("📡 STM32 [%s]: Received sensor data - Flow: %.2f, pH: %.2f, Turbidity: %.2f, TDS: %.2f", 
-		request.DeviceID, request.Flow, request.Ph, request.Turbidity, request.TDS)
+	log.Printf("✅ STM32 [%s]: Stored sensor data - Flow: %.2f L/min, pH: %.2f, Turbidity: %.2f NTU, TDS: %.2f PPM", 
+		request.DeviceID, request.Flow, phValue, turbidityValue, tdsValue)
 
 	// Return success response
 	response := APIResponse{
