@@ -4,7 +4,121 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 )
+
+// RunMigrations runs all SQL migration files from the migrations directory
+func RunMigrations(db *sql.DB) error {
+	log.Println("🔄 Running database migrations...")
+
+	// Create schema_migrations table to track executed migrations
+	createMigrationTable := `
+	CREATE TABLE IF NOT EXISTS schema_migrations (
+		id SERIAL PRIMARY KEY,
+		filename VARCHAR(255) UNIQUE NOT NULL,
+		executed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	);`
+
+	if _, err := db.Exec(createMigrationTable); err != nil {
+		return fmt.Errorf("failed to create schema_migrations table: %w", err)
+	}
+
+	// Mark old migrations as executed if tables already exist (for existing databases)
+	var sensorTableExists bool
+	err := db.QueryRow(`
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables 
+			WHERE table_name = 'sensor_readings'
+		)
+	`).Scan(&sensorTableExists)
+	
+	if err != nil {
+		return fmt.Errorf("failed to check existing tables: %w", err)
+	}
+
+	if sensorTableExists {
+		// Database already has tables, mark old migrations as executed
+		log.Println("📋 Existing database detected, marking old migrations as executed...")
+		oldMigrations := []string{
+			"001_initial_schema.sql",
+			"002_update_schema_filter_mode.sql", 
+			"003_add_device_status.sql",
+			"004_add_device_id.sql",
+		}
+		
+		for _, filename := range oldMigrations {
+			var count int
+			db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE filename = $1", filename).Scan(&count)
+			
+			if count == 0 {
+				_, err := db.Exec("INSERT INTO schema_migrations (filename) VALUES ($1)", filename)
+				if err != nil {
+					log.Printf("⚠️  Warning: Could not mark %s as executed: %v", filename, err)
+				} else {
+					log.Printf("✅ Marked %s as already executed", filename)
+				}
+			}
+		}
+	}
+
+	// Get list of migration files
+	migrationsDir := "migrations"
+	files, err := os.ReadDir(migrationsDir)
+	if err != nil {
+		return fmt.Errorf("failed to read migrations directory: %w", err)
+	}
+
+	// Filter and sort SQL files
+	var sqlFiles []string
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".sql") {
+			sqlFiles = append(sqlFiles, file.Name())
+		}
+	}
+	sort.Strings(sqlFiles)
+
+	// Execute each migration if not already executed
+	for _, filename := range sqlFiles {
+		// Check if migration already executed
+		var count int
+		err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE filename = $1", filename).Scan(&count)
+		if err != nil {
+			return fmt.Errorf("failed to check migration status for %s: %w", filename, err)
+		}
+
+		if count > 0 {
+			log.Printf("⏭️  Skipping already executed migration: %s", filename)
+			continue
+		}
+
+		// Read migration file
+		filePath := filepath.Join(migrationsDir, filename)
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to read migration file %s: %w", filename, err)
+		}
+
+		// Execute migration
+		log.Printf("▶️  Running migration: %s", filename)
+		if _, err := db.Exec(string(content)); err != nil {
+			return fmt.Errorf("failed to execute migration %s: %w", filename, err)
+		}
+
+		// Record migration as executed
+		_, err = db.Exec("INSERT INTO schema_migrations (filename) VALUES ($1)", filename)
+		if err != nil {
+			return fmt.Errorf("failed to record migration %s: %w", filename, err)
+		}
+
+		log.Printf("✅ Successfully executed migration: %s", filename)
+	}
+
+	log.Println("✅ All migrations completed successfully")
+	return nil
+}
 
 // CreateTables creates all necessary tables for the AquaSmart system
 func CreateTables(db *sql.DB) error {
