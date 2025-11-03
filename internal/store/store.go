@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -196,6 +197,11 @@ func (s *Store) SetCurrentFilterMode(mode models.FilterMode) {
 	defer s.mu.Unlock()
 
 	s.currentFilterMode = mode
+}
+
+// GetFilterModeTracking returns filter mode tracking (in-memory store doesn't track this)
+func (s *Store) GetFilterModeTracking() map[string]interface{} {
+	return nil // Not supported in in-memory store
 }
 
 // GetReadingsByMode returns all readings for a specific filter mode
@@ -463,4 +469,61 @@ func (s *Store) GetLEDCommand() string {
 	defer s.mu.RUnlock()
 
 	return s.ledCommand
+}
+
+// ===== Schedule Management Methods (Stub - Not implemented for in-memory store) =====
+
+// CreateSchedule is not implemented for in-memory store
+func (s *Store) CreateSchedule(schedule *models.FilterSchedule) error {
+	return fmt.Errorf("schedule management not supported in memory store")
+}
+
+// GetSchedule is not implemented for in-memory store
+func (s *Store) GetSchedule(id int) (*models.FilterSchedule, error) {
+	return nil, fmt.Errorf("schedule management not supported in memory store")
+}
+
+// GetAllSchedules is not implemented for in-memory store
+func (s *Store) GetAllSchedules(activeOnly bool) ([]models.FilterSchedule, error) {
+	return nil, fmt.Errorf("schedule management not supported in memory store")
+}
+
+// UpdateSchedule is not implemented for in-memory store
+func (s *Store) UpdateSchedule(schedule *models.FilterSchedule) error {
+	return fmt.Errorf("schedule management not supported in memory store")
+}
+
+// DeleteSchedule is not implemented for in-memory store
+func (s *Store) DeleteSchedule(id int) error {
+	return fmt.Errorf("schedule management not supported in memory store")
+}
+
+// ToggleSchedule is not implemented for in-memory store
+func (s *Store) ToggleSchedule(id int, isActive bool) error {
+	return fmt.Errorf("schedule management not supported in memory store")
+}
+
+// CreateScheduleExecution is not implemented for in-memory store
+func (s *Store) CreateScheduleExecution(execution *models.ScheduleExecution) error {
+	return fmt.Errorf("schedule execution tracking not supported in memory store")
+}
+
+// GetScheduleExecution is not implemented for in-memory store
+func (s *Store) GetScheduleExecution(id int) (*models.ScheduleExecution, error) {
+	return nil, fmt.Errorf("schedule execution tracking not supported in memory store")
+}
+
+// GetScheduleExecutions is not implemented for in-memory store
+func (s *Store) GetScheduleExecutions(scheduleID int, limit int) ([]models.ScheduleExecution, error) {
+	return nil, fmt.Errorf("schedule execution tracking not supported in memory store")
+}
+
+// GetAllScheduleExecutions is not implemented for in-memory store
+func (s *Store) GetAllScheduleExecutions(limit int) ([]models.ScheduleExecution, error) {
+	return nil, fmt.Errorf("schedule execution tracking not supported in memory store")
+}
+
+// UpdateScheduleExecution is not implemented for in-memory store
+func (s *Store) UpdateScheduleExecution(execution *models.ScheduleExecution) error {
+	return fmt.Errorf("schedule execution tracking not supported in memory store")
 }
