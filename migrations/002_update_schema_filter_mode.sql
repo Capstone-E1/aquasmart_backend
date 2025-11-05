@@ -23,9 +23,9 @@ ADD COLUMN IF NOT EXISTS filter_mode VARCHAR(20) NOT NULL DEFAULT 'drinking_wate
 ADD COLUMN IF NOT EXISTS flow DECIMAL(8,2) NOT NULL DEFAULT 0 CHECK (flow >= 0);
 
 -- Create new optimized indexes
-CREATE INDEX idx_sensor_readings_timestamp ON sensor_readings(timestamp);
-CREATE INDEX idx_sensor_readings_filter_mode ON sensor_readings(filter_mode);
-CREATE INDEX idx_sensor_readings_mode_timestamp ON sensor_readings(filter_mode, timestamp);
+CREATE INDEX IF NOT EXISTS idx_sensor_readings_timestamp ON sensor_readings(timestamp);
+CREATE INDEX IF NOT EXISTS idx_sensor_readings_filter_mode ON sensor_readings(filter_mode);
+CREATE INDEX IF NOT EXISTS idx_sensor_readings_mode_timestamp ON sensor_readings(filter_mode, timestamp);
 
 -- Create view for latest reading per filter mode
 CREATE VIEW latest_readings_by_mode AS
