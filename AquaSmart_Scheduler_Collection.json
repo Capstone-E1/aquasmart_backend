@@ -1,0 +1,433 @@
+{
+	"info": {
+		"_postman_id": "scheduler-collection-001",
+		"name": "AquaSmart Filter Scheduler API",
+		"description": "API Collection for AquaSmart Automated Filter Mode Scheduler",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Schedules",
+			"item": [
+				{
+					"name": "Create Schedule - Daily Drinking Water",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Morning Drinking Water\",\n  \"filter_mode\": \"drinking_water\",\n  \"start_time\": \"06:00:00\",\n  \"duration_minutes\": 180,\n  \"days_of_week\": [\"monday\", \"tuesday\", \"wednesday\", \"thursday\", \"friday\", \"saturday\", \"sunday\"],\n  \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules"
+							]
+						},
+						"description": "Create a daily schedule for drinking water mode from 6 AM for 3 hours"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Schedule - Weekday Household",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Weekday Household Water\",\n  \"filter_mode\": \"household_water\",\n  \"start_time\": \"09:00:00\",\n  \"duration_minutes\": 120,\n  \"days_of_week\": [\"monday\", \"tuesday\", \"wednesday\", \"thursday\", \"friday\"],\n  \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules"
+							]
+						},
+						"description": "Create a weekday schedule for household water mode from 9 AM for 2 hours"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Schedule - Weekend Only",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Weekend Drinking Water\",\n  \"filter_mode\": \"drinking_water\",\n  \"start_time\": \"08:00:00\",\n  \"duration_minutes\": 240,\n  \"days_of_week\": [\"saturday\", \"sunday\"],\n  \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules"
+							]
+						},
+						"description": "Create a weekend schedule for drinking water from 8 AM for 4 hours"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Schedules",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules"
+							]
+						},
+						"description": "Get all schedules (active and inactive)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Active Schedules Only",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules?active_only=true",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules"
+							],
+							"query": [
+								{
+									"key": "active_only",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Get only active schedules"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Schedule by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								"1"
+							]
+						},
+						"description": "Get schedule details by ID (change '1' to your schedule ID)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Schedule",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Morning Drinking Water\",\n  \"filter_mode\": \"drinking_water\",\n  \"start_time\": \"07:00:00\",\n  \"duration_minutes\": 120,\n  \"days_of_week\": [\"monday\", \"wednesday\", \"friday\"],\n  \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								"1"
+							]
+						},
+						"description": "Update schedule details (change '1' to your schedule ID)"
+					},
+					"response": []
+				},
+				{
+					"name": "Toggle Schedule (Enable/Disable)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules/1/toggle",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								"1",
+								"toggle"
+							]
+						},
+						"description": "Toggle schedule active status (enable if disabled, disable if enabled)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Schedule",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								"1"
+							]
+						},
+						"description": "Delete a schedule by ID (change '1' to your schedule ID)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Schedule Executions",
+			"item": [
+				{
+					"name": "Get All Execution History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules/executions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								"executions"
+							]
+						},
+						"description": "Get execution history for all schedules"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Execution History by Schedule ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules/executions?schedule_id=1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								"executions"
+							],
+							"query": [
+								{
+									"key": "schedule_id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get execution history for a specific schedule (change '1' to your schedule ID)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Filter Commands",
+			"item": [
+				{
+					"name": "Set Filter Mode - Manual (No Override)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"filter_mode\": \"drinking_water\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/v1/commands/filter",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"commands",
+								"filter"
+							]
+						},
+						"description": "Set filter mode manually without override reason"
+					},
+					"response": []
+				},
+				{
+					"name": "Set Filter Mode - With Override Reason",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"filter_mode\": \"household_water\",\n  \"override_reason\": \"Emergency cleaning needed\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/v1/commands/filter",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"commands",
+								"filter"
+							]
+						},
+						"description": "Set filter mode manually with override reason (will cancel any running schedule)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Testing & Examples",
+			"item": [
+				{
+					"name": "Create Test Schedule - Now (for immediate testing)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Test Schedule - Now\",\n  \"filter_mode\": \"drinking_water\",\n  \"start_time\": \"15:05:00\",\n  \"duration_minutes\": 5,\n  \"days_of_week\": [\"sunday\"],\n  \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/v1/schedules",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"schedules"
+							]
+						},
+						"description": "⚠️ CHANGE start_time to current time + 2 minutes and days_of_week to today's day!\nExample: If now is Monday 14:30, set start_time to 14:32:00 and days_of_week to [\"monday\"]"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080"
+		},
+		{
+			"key": "schedule_id",
+			"value": "1",
+			"type": "string"
+		}
+	]
+}

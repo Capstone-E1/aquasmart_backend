@@ -22,6 +22,7 @@ type DataStore interface {
 	GetActiveDevices() []string
 	GetCurrentFilterMode() models.FilterMode
 	SetCurrentFilterMode(models.FilterMode)
+	GetFilterModeTracking() map[string]interface{}
 	GetWaterQualityStatus() (*models.WaterQualityStatus, bool)
 	GetWaterQualityStatusByMode(models.FilterMode) (*models.WaterQualityStatus, bool)
 	GetAllWaterQualityStatus() []models.WaterQualityStatus
@@ -39,4 +40,19 @@ type DataStore interface {
 	// LED control commands
 	SetLEDCommand(string)
 	GetLEDCommand() string
+
+	// Schedule management
+	CreateSchedule(*models.FilterSchedule) error
+	GetSchedule(int) (*models.FilterSchedule, error)
+	GetAllSchedules(activeOnly bool) ([]models.FilterSchedule, error)
+	UpdateSchedule(*models.FilterSchedule) error
+	DeleteSchedule(int) error
+	ToggleSchedule(int, bool) error
+
+	// Schedule execution tracking
+	CreateScheduleExecution(*models.ScheduleExecution) error
+	GetScheduleExecution(int) (*models.ScheduleExecution, error)
+	GetScheduleExecutions(scheduleID int, limit int) ([]models.ScheduleExecution, error)
+	GetAllScheduleExecutions(limit int) ([]models.ScheduleExecution, error)
+	UpdateScheduleExecution(*models.ScheduleExecution) error
 }
