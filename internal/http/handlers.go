@@ -12,6 +12,7 @@ import (
 
 	"github.com/Capstone-E1/aquasmart_backend/internal/export"
 	"github.com/Capstone-E1/aquasmart_backend/internal/models"
+	"github.com/Capstone-E1/aquasmart_backend/internal/services"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
 	"github.com/go-chi/chi/v5"
 )
@@ -20,13 +21,15 @@ import (
 type Handlers struct {
 	store         store.DataStore
 	exportService *export.ExportService
+	scheduler     *services.Scheduler
 }
 
 // NewHandlers creates a new handlers instance
-func NewHandlers(dataStore store.DataStore) *Handlers {
+func NewHandlers(dataStore store.DataStore, scheduler *services.Scheduler) *Handlers {
 	return &Handlers{
 		store:         dataStore,
 		exportService: export.NewExportService(),
+		scheduler:     scheduler,
 	}
 }
 
@@ -390,6 +393,9 @@ func (h *Handlers) GetSTM32Command(w http.ResponseWriter, r *http.Request) {
 	// This ensures consistency across all endpoints
 	filterMode := h.store.GetCurrentFilterMode()
 
+	// Get filter mode tracking info
+	filterModeInfo := h.store.GetFilterModeTracking()
+
 	// Get filtration process if any
 	process, processExists := h.store.GetFiltrationProcess()
 
@@ -397,6 +403,14 @@ func (h *Handlers) GetSTM32Command(w http.ResponseWriter, r *http.Request) {
 	commandData := map[string]interface{}{
 		"filter_mode": filterMode,
 		"timestamp":   time.Now(),
+	}
+
+	// Add filter mode tracking info if available
+	if filterModeInfo != nil {
+		commandData["filter_mode_started_at"] = filterModeInfo["started_at"]
+		commandData["filter_mode_duration_seconds"] = filterModeInfo["duration_seconds"]
+		commandData["total_flow_liters"] = filterModeInfo["total_flow_liters"]
+		commandData["statistics"] = filterModeInfo["statistics"]
 	}
 
 	if processExists {
@@ -498,8 +512,9 @@ func (h *Handlers) SetLEDCommand(w http.ResponseWriter, r *http.Request) {
 // SetFilterMode handles POST requests to set the water filter mode
 func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		Mode  models.FilterMode `json:"mode"`
-		Force bool              `json:"force,omitempty"` // Optional: force mode change during filtration
+		Mode           models.FilterMode `json:"mode"`
+		Force          bool              `json:"force,omitempty"`           // Optional: force mode change during filtration
+		OverrideReason string            `json:"override_reason,omitempty"` // Optional: reason for manual override
 	}
 
 	// Parse request body
@@ -572,6 +587,15 @@ func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 
 	// Update current filter mode in store
 	h.store.SetCurrentFilterMode(request.Mode)
+
+	// Notify scheduler about manual override
+	if h.scheduler != nil {
+		overrideReason := request.OverrideReason
+		if overrideReason == "" {
+			overrideReason = fmt.Sprintf("Manual mode change to %s", request.Mode)
+		}
+		h.scheduler.HandleManualOverride(overrideReason)
+	}
 
 	// Note: With HTTP-only communication, STM32 will poll for commands via GET /api/v1/sensors/stm32/command
 	log.Printf("✅ Filter mode changed to %s (STM32 will poll for this command)", request.Mode)
@@ -1353,4 +1377,288 @@ func calculateWorstValues(readings []models.SensorReading) WorstDailyValues {
 		WorstTurbidity: worstTurbidity,
 		TotalReadings:  len(readings),
 	}
+}
+
+// ===== Schedule Management Handlers =====
+
+// CreateSchedule handles POST /api/v1/schedules
+func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
+	var request models.CreateScheduleRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		h.sendErrorResponse(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate request
+	if err := request.Validate(); err != nil {
+		h.sendErrorResponse(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Normalize data
+	normalizedTime := models.NormalizeTimeFormat(request.StartTime)
+	normalizedDays := models.NormalizeDaysOfWeek(request.DaysOfWeek)
+
+	// Create schedule object
+	schedule := &models.FilterSchedule{
+		Name:            request.Name,
+		FilterMode:      request.FilterMode,
+		StartTime:       normalizedTime,
+		DurationMinutes: request.DurationMinutes,
+		DaysOfWeek:      normalizedDays,
+		IsActive:        request.IsActive,
+	}
+
+	// Save to database
+	if err := h.store.CreateSchedule(schedule); err != nil {
+		h.sendErrorResponse(w, "Failed to create schedule: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate next execution
+	nextExecution := schedule.CalculateNextExecution()
+
+	response := APIResponse{
+		Success: true,
+		Message: "Schedule created successfully",
+		Data: map[string]interface{}{
+			"schedule":       schedule,
+			"next_execution": nextExecution,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetAllSchedules handles GET /api/v1/schedules
+func (h *Handlers) GetAllSchedules(w http.ResponseWriter, r *http.Request) {
+	// Check query parameter for active_only filter
+	activeOnlyStr := r.URL.Query().Get("active_only")
+	activeOnly := activeOnlyStr == "true"
+
+	schedules, err := h.store.GetAllSchedules(activeOnly)
+	if err != nil {
+		h.sendErrorResponse(w, "Failed to get schedules: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Add next execution time for each schedule
+	schedulesWithNext := make([]map[string]interface{}, len(schedules))
+	for i, schedule := range schedules {
+		nextExecution := schedule.CalculateNextExecution()
+		schedulesWithNext[i] = map[string]interface{}{
+			"schedule":       schedule,
+			"next_execution": nextExecution,
+		}
+	}
+
+	response := APIResponse{
+		Success: true,
+		Data:    schedulesWithNext,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetSchedule handles GET /api/v1/schedules/{id}
+func (h *Handlers) GetSchedule(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		h.sendErrorResponse(w, "Invalid schedule ID", http.StatusBadRequest)
+		return
+	}
+
+	schedule, err := h.store.GetSchedule(id)
+	if err != nil {
+		h.sendErrorResponse(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Get recent executions
+	executions, _ := h.store.GetScheduleExecutions(id, 5)
+
+	// Calculate next execution
+	nextExecution := schedule.CalculateNextExecution()
+
+	response := APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"schedule":         schedule,
+			"next_execution":   nextExecution,
+			"recent_executions": executions,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// UpdateSchedule handles PUT /api/v1/schedules/{id}
+func (h *Handlers) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		h.sendErrorResponse(w, "Invalid schedule ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get existing schedule
+	existing, err := h.store.GetSchedule(id)
+	if err != nil {
+		h.sendErrorResponse(w, "Schedule not found", http.StatusNotFound)
+		return
+	}
+
+	var request models.UpdateScheduleRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		h.sendErrorResponse(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate request
+	if err := request.Validate(); err != nil {
+		h.sendErrorResponse(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Update fields if provided
+	if request.Name != nil {
+		existing.Name = *request.Name
+	}
+	if request.FilterMode != nil {
+		existing.FilterMode = *request.FilterMode
+	}
+	if request.StartTime != nil {
+		existing.StartTime = models.NormalizeTimeFormat(*request.StartTime)
+	}
+	if request.DurationMinutes != nil {
+		existing.DurationMinutes = *request.DurationMinutes
+	}
+	if request.DaysOfWeek != nil {
+		existing.DaysOfWeek = models.NormalizeDaysOfWeek(request.DaysOfWeek)
+	}
+	if request.IsActive != nil {
+		existing.IsActive = *request.IsActive
+	}
+
+	// Save updated schedule
+	if err := h.store.UpdateSchedule(existing); err != nil {
+		h.sendErrorResponse(w, "Failed to update schedule: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := APIResponse{
+		Success: true,
+		Message: "Schedule updated successfully",
+		Data:    existing,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// DeleteSchedule handles DELETE /api/v1/schedules/{id}
+func (h *Handlers) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		h.sendErrorResponse(w, "Invalid schedule ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.store.DeleteSchedule(id); err != nil {
+		h.sendErrorResponse(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := APIResponse{
+		Success: true,
+		Message: "Schedule deleted successfully",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// ToggleSchedule handles POST /api/v1/schedules/{id}/toggle
+func (h *Handlers) ToggleSchedule(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		h.sendErrorResponse(w, "Invalid schedule ID", http.StatusBadRequest)
+		return
+	}
+
+	var request struct {
+		IsActive bool `json:"is_active"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		h.sendErrorResponse(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.store.ToggleSchedule(id, request.IsActive); err != nil {
+		h.sendErrorResponse(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	status := "disabled"
+	if request.IsActive {
+		status = "enabled"
+	}
+
+	response := APIResponse{
+		Success: true,
+		Message: fmt.Sprintf("Schedule %s successfully", status),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetScheduleExecutionHistory handles GET /api/v1/schedules/executions
+func (h *Handlers) GetScheduleExecutionHistory(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 50 // default
+	if limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	scheduleIDStr := r.URL.Query().Get("schedule_id")
+	var executions []models.ScheduleExecution
+	var err error
+
+	if scheduleIDStr != "" {
+		// Get executions for specific schedule
+		scheduleID, err := strconv.Atoi(scheduleIDStr)
+		if err != nil {
+			h.sendErrorResponse(w, "Invalid schedule_id", http.StatusBadRequest)
+			return
+		}
+		executions, err = h.store.GetScheduleExecutions(scheduleID, limit)
+	} else {
+		// Get all executions
+		executions, err = h.store.GetAllScheduleExecutions(limit)
+	}
+
+	if err != nil {
+		h.sendErrorResponse(w, "Failed to get execution history: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := APIResponse{
+		Success: true,
+		Data:    executions,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
