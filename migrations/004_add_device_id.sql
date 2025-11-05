@@ -35,7 +35,7 @@ FROM sensor_readings
 ORDER BY device_id, timestamp DESC;
 
 -- Update existing view to include device_id
-DROP VIEW IF EXISTS latest_readings_by_mode;
+DROP VIEW IF EXISTS latest_readings_by_mode CASCADE;
 CREATE VIEW latest_readings_by_mode AS
 SELECT DISTINCT ON (filter_mode, device_id)
     device_id,
