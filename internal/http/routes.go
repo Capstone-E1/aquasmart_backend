@@ -4,12 +4,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/Capstone-E1/aquasmart_backend/internal/services"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
 	"github.com/Capstone-E1/aquasmart_backend/internal/ws"
 )
 
 // SetupRoutes configures all HTTP routes for the water purification API
-func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub) *chi.Mux {
+func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, scheduler *services.Scheduler) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -28,8 +29,8 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub) *chi.Mux {
 		MaxAge:           300,
 	}))
 
-	// Create handlers (HTTP-only, no MQTT)
-	handlers := NewHandlers(dataStore)
+	// Create handlers with scheduler support
+	handlers := NewHandlers(dataStore, scheduler)
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
@@ -78,9 +79,22 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub) *chi.Mux {
 			r.Get("/stm32/mode", handlers.GetSTM32FilterModeSimple) // Simple text-only filter mode
 			r.Get("/stm32/led", handlers.GetSTM32LEDStatus)         // GET LED command: ON/OFF (for ESP32 polling)
 			r.Post("/stm32/led", handlers.SetLEDCommand)            // POST to set LED command (from Postman/Frontend)
-		})		// Command routes for filter control
+		})
+		
+		// Command routes for filter control
 		r.Route("/commands", func(r chi.Router) {
 			r.Post("/filter", handlers.SetFilterMode)
+		})
+
+		// Schedule management routes
+		r.Route("/schedules", func(r chi.Router) {
+			r.Get("/", handlers.GetAllSchedules)                  // List all schedules
+			r.Post("/", handlers.CreateSchedule)                  // Create new schedule
+			r.Get("/{id}", handlers.GetSchedule)                  // Get specific schedule
+			r.Put("/{id}", handlers.UpdateSchedule)               // Update schedule
+			r.Delete("/{id}", handlers.DeleteSchedule)            // Delete schedule
+			r.Post("/{id}/toggle", handlers.ToggleSchedule)       // Enable/disable schedule
+			r.Get("/executions", handlers.GetScheduleExecutionHistory) // Execution history
 		})
 
 		// Export routes for data history
