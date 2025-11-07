@@ -21,6 +21,7 @@ type Store struct {
 	filtrationProcess       *models.FiltrationProcess       // Current filtration process state
 	ledCommand              string                          // Current LED command (ON/OFF)
 	maxReadings             int
+	mlData                  *mlStore                        // ML-related data storage
 }
 
 // NewStore creates a new in-memory store
@@ -37,6 +38,7 @@ func NewStore(maxReadings int) *Store {
 		currentFilterMode: models.FilterModeDrinking, // Default to drinking water mode
 		ledCommand:        "OFF",                     // Default LED is OFF
 		maxReadings:       maxReadings,
+		mlData:            newMLStore(),              // Initialize ML data storage
 	}
 }
 

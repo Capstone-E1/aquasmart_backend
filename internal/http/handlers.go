@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Capstone-E1/aquasmart_backend/internal/export"
+	"github.com/Capstone-E1/aquasmart_backend/internal/ml"
 	"github.com/Capstone-E1/aquasmart_backend/internal/models"
 	"github.com/Capstone-E1/aquasmart_backend/internal/services"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
@@ -22,14 +23,16 @@ type Handlers struct {
 	store         store.DataStore
 	exportService *export.ExportService
 	scheduler     *services.Scheduler
+	mlService     *ml.MLService
 }
 
 // NewHandlers creates a new handlers instance
-func NewHandlers(dataStore store.DataStore, scheduler *services.Scheduler) *Handlers {
+func NewHandlers(dataStore store.DataStore, scheduler *services.Scheduler, mlService *ml.MLService) *Handlers {
 	return &Handlers{
 		store:         dataStore,
 		exportService: export.NewExportService(),
 		scheduler:     scheduler,
+		mlService:     mlService,
 	}
 }
 
@@ -290,6 +293,11 @@ func (h *Handlers) AddSensorData(w http.ResponseWriter, r *http.Request) {
 	// Store the reading
 	h.store.AddSensorReading(reading)
 
+	// Process reading for ML analysis (anomaly detection & prediction updates)
+	if h.mlService != nil {
+		go h.mlService.ProcessNewReading(&reading)
+	}
+
 	// Return success response
 	response := APIResponse{
 		Success: true,
@@ -368,8 +376,13 @@ func (h *Handlers) AddSTM32SensorData(w http.ResponseWriter, r *http.Request) {
 	// Store the reading
 	h.store.AddSensorReading(reading)
 
-	log.Printf("✅ STM32 [%s]: Stored sensor data - Flow: %.2f L/min, pH: %.2f, Turbidity: %.2f NTU, TDS: %.2f PPM", 
+	log.Printf("✅ STM32 [%s]: Stored sensor data - Flow: %.2f L/min, pH: %.2f, Turbidity: %.2f NTU, TDS: %.2f PPM",
 		request.DeviceID, request.Flow, phValue, turbidityValue, tdsValue)
+
+	// Process reading for ML analysis (anomaly detection & prediction updates)
+	if h.mlService != nil {
+		go h.mlService.ProcessNewReading(&reading)
+	}
 
 	// Return success response
 	response := APIResponse{
