@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Capstone-E1/aquasmart_backend/internal/export"
+	"github.com/Capstone-E1/aquasmart_backend/internal/ml"
 	"github.com/Capstone-E1/aquasmart_backend/internal/models"
 	"github.com/Capstone-E1/aquasmart_backend/internal/mqtt"
 	"github.com/Capstone-E1/aquasmart_backend/internal/services"
@@ -23,15 +24,17 @@ type Handlers struct {
 	exportService *export.ExportService
 	scheduler     *services.Scheduler
 	mqtt          *mqtt.Client
+  mlService     *ml.MLService
 }
 
 // NewHandlers creates a new handlers instance
-func NewHandlers(dataStore store.DataStore, scheduler *services.Scheduler, mqttClient *mqtt.Client) *Handlers {
+func NewHandlers(dataStore store.DataStore, scheduler *services.Scheduler, mqttClient *mqtt.Client, mlService *ml.MLService) *Handlers {
 	return &Handlers{
 		store:         dataStore,
 		exportService: export.NewExportService(),
 		scheduler:     scheduler,
 		mqtt:          mqttClient,
+		mlService:     mlService,
 	}
 }
 
@@ -312,6 +315,11 @@ func (h *Handlers) AddSensorData(w http.ResponseWriter, r *http.Request) {
 
 	// Store the reading
 	h.store.AddSensorReading(reading)
+
+	// Process reading for ML analysis (anomaly detection & prediction updates)
+	if h.mlService != nil {
+		go h.mlService.ProcessNewReading(&reading)
+	}
 
 	// Return success response
 	response := APIResponse{

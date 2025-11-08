@@ -19,6 +19,7 @@ type Store struct {
 	currentFilterMode       models.FilterMode               // Current active filter mode
 	filtrationProcess       *models.FiltrationProcess       // Current filtration process state
 	maxReadings             int
+	mlData                  *mlStore                        // ML-related data storage
 }
 
 // NewStore creates a new in-memory store
@@ -34,6 +35,7 @@ func NewStore(maxReadings int) *Store {
 		latestByDevice:    make(map[string]*models.SensorReading),
 		currentFilterMode: models.FilterModeDrinking, // Default to drinking water mode
 		maxReadings:       maxReadings,
+		mlData:            newMLStore(),              // Initialize ML data storage
 	}
 }
 
