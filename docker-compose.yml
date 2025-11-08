@@ -1,42 +1,51 @@
-version: '3.8'
-
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: aquasmart_postgres
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: aquasmart_mosquitto
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: aquasmart
-      POSTGRES_USER: aquasmart_user
-      POSTGRES_PASSWORD: aquasmart_password
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
     ports:
-      - "5433:5432"
+      - "1883:1883"
+      - "9001:9001"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d/
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aquasmart_user -d aquasmart"]
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Optional: pgAdmin for database management (web interface)
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: aquasmart_pgadmin
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aquasmart_backend
     restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@aquasmart.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
-      - "8081:80"
+      - "8080:8080"
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      
+      MQTT_BROKER: mosquitto:1883
+      MQTT_CLIENT_ID: aquasmart_backend
+      
+      SERVER_PORT: 8080
     depends_on:
-      - postgres
-    profiles:
-      - admin  # Only start when explicitly requested
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  postgres_data:
+  mosquitto_data:
+    driver: local
+  mosquitto_log:
     driver: local
