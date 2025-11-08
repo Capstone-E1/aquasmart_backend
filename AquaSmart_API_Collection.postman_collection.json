@@ -1,0 +1,799 @@
+{
+	"info": {
+		"_postman_id": "aquasmart-api-collection-2025",
+		"name": "AquaSmart API Collection",
+		"description": "Complete API collection for AquaSmart Backend - Filter Management, Sensor Data, Statistics, and Schedules",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "aquasmart"
+	},
+	"item": [
+		{
+			"name": "System & Statistics",
+			"item": [
+				{
+					"name": "Get System Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"stats"
+							]
+						},
+						"description": "Get system statistics including total readings, active devices, and server time"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Sensor Data Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sensors/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sensors",
+								"stats"
+							]
+						},
+						"description": "Get detailed sensor data statistics grouped by filter mode and device"
+					},
+					"response": []
+				}
+			],
+			"description": "System-wide statistics and monitoring endpoints"
+		},
+		{
+			"name": "Sensor Data",
+			"item": [
+				{
+					"name": "Get Latest Sensor Readings",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sensors/latest",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sensors",
+								"latest"
+							]
+						},
+						"description": "Get the latest sensor readings from all active devices"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Recent Sensor Readings",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sensors/recent?limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sensors",
+								"recent"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10",
+									"description": "Number of readings to fetch (default: 50)"
+								}
+							]
+						},
+						"description": "Get N most recent sensor readings"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Water Quality Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sensors/quality",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sensors",
+								"quality"
+							]
+						},
+						"description": "Get current water quality status based on sensor parameters"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Best Daily Values",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sensors/best-daily",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sensors",
+								"best-daily"
+							]
+						},
+						"description": "Get best sensor values for today (optimal pH, lowest turbidity, etc.)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Worst Daily Values",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sensors/worst-daily",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sensors",
+								"worst-daily"
+							]
+						},
+						"description": "Get worst sensor values for today (for monitoring alerts)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Historical Data",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sensors/history?start=2025-11-01T00:00:00Z&end=2025-11-07T23:59:59Z",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sensors",
+								"history"
+							],
+							"query": [
+								{
+									"key": "start",
+									"value": "2025-11-01T00:00:00Z",
+									"description": "Start timestamp (ISO 8601)"
+								},
+								{
+									"key": "end",
+									"value": "2025-11-07T23:59:59Z",
+									"description": "End timestamp (ISO 8601)"
+								}
+							]
+						},
+						"description": "Get sensor data within a specific time range"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Devices Latest",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sensors/devices/latest",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sensors",
+								"devices",
+								"latest"
+							]
+						},
+						"description": "Get latest reading from each active device"
+					},
+					"response": []
+				}
+			],
+			"description": "Sensor data retrieval and monitoring endpoints"
+		},
+		{
+			"name": "Filter Control",
+			"item": [
+				{
+					"name": "Get Filter Status & Statistics (GET)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/commands/filter",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"commands",
+								"filter"
+							]
+						},
+						"description": "Get current filter mode and flow statistics (liter hari ini, minggu, bulan) - Read-only, perfect for dashboard polling"
+					},
+					"response": []
+				},
+				{
+					"name": "Set Filter Mode (Drinking Water)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mode\": \"drinking_water\",\n  \"forced\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/commands/filter",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"commands",
+								"filter"
+							]
+						},
+						"description": "Change filter mode to drinking_water and get statistics (liter hari ini, minggu, bulan)"
+					},
+					"response": []
+				},
+				{
+					"name": "Set Filter Mode (Household Water)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mode\": \"household_water\",\n  \"forced\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/commands/filter",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"commands",
+								"filter"
+							]
+						},
+						"description": "Change filter mode to household_water and get statistics"
+					},
+					"response": []
+				},
+				{
+					"name": "Manual Override Filter Mode",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mode\": \"drinking_water\",\n  \"forced\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/commands/filter",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"commands",
+								"filter"
+							]
+						},
+						"description": "Manually override filter mode (bypasses scheduler)"
+					},
+					"response": []
+				}
+			],
+			"description": "Filter mode control and status endpoints"
+		},
+		{
+			"name": "Schedules",
+			"item": [
+				{
+					"name": "Create Schedule",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Morning Drinking Water\",\n  \"filter_mode\": \"drinking_water\",\n  \"start_time\": \"06:00\",\n  \"duration_minutes\": 120,\n  \"days_of_week\": [1, 2, 3, 4, 5],\n  \"is_active\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/schedules",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"schedules"
+							]
+						},
+						"description": "Create a new filter mode schedule. Days: 0=Sunday, 1=Monday, ..., 6=Saturday"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Schedules",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/schedules",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"schedules"
+							]
+						},
+						"description": "Get all filter schedules"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Schedule by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/schedules/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Schedule ID"
+								}
+							]
+						},
+						"description": "Get a specific schedule by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Schedule",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Morning Schedule\",\n  \"filter_mode\": \"drinking_water\",\n  \"start_time\": \"06:30\",\n  \"duration_minutes\": 90,\n  \"days_of_week\": [1, 2, 3, 4, 5, 6],\n  \"is_active\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/schedules/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Schedule ID"
+								}
+							]
+						},
+						"description": "Update an existing schedule"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Schedule",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/schedules/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Schedule ID"
+								}
+							]
+						},
+						"description": "Delete a schedule"
+					},
+					"response": []
+				},
+				{
+					"name": "Toggle Schedule Active Status",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"is_active\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/schedules/:id/toggle",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								":id",
+								"toggle"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Schedule ID"
+								}
+							]
+						},
+						"description": "Enable or disable a schedule without deleting it"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Schedule Execution History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/schedules/:id/executions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								":id",
+								"executions"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Schedule ID"
+								}
+							]
+						},
+						"description": "Get execution history for a specific schedule"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Execution History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/schedules/executions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"schedules",
+								"executions"
+							]
+						},
+						"description": "Get all schedule execution history"
+					},
+					"response": []
+				}
+			],
+			"description": "Schedule management and execution history endpoints"
+		},
+		{
+			"name": "Data Export",
+			"item": [
+				{
+					"name": "Export Sensor Data (CSV)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/export/sensors?format=csv&start=2025-11-01T00:00:00Z&end=2025-11-07T23:59:59Z",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"export",
+								"sensors"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "csv",
+									"description": "Export format: csv or json"
+								},
+								{
+									"key": "start",
+									"value": "2025-11-01T00:00:00Z",
+									"description": "Start timestamp (optional)"
+								},
+								{
+									"key": "end",
+									"value": "2025-11-07T23:59:59Z",
+									"description": "End timestamp (optional)"
+								}
+							]
+						},
+						"description": "Export sensor data as CSV file"
+					},
+					"response": []
+				},
+				{
+					"name": "Export Sensor Data (JSON)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/export/sensors?format=json&start=2025-11-01T00:00:00Z&end=2025-11-07T23:59:59Z",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"export",
+								"sensors"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "json",
+									"description": "Export format: csv or json"
+								},
+								{
+									"key": "start",
+									"value": "2025-11-01T00:00:00Z",
+									"description": "Start timestamp (optional)"
+								},
+								{
+									"key": "end",
+									"value": "2025-11-07T23:59:59Z",
+									"description": "End timestamp (optional)"
+								}
+							]
+						},
+						"description": "Export sensor data as JSON file"
+					},
+					"response": []
+				},
+				{
+					"name": "Export Statistics Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/export/statistics?format=json",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"export",
+								"statistics"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "json",
+									"description": "Export format: json"
+								}
+							]
+						},
+						"description": "Export comprehensive statistics report"
+					},
+					"response": []
+				}
+			],
+			"description": "Data export endpoints for CSV and JSON formats"
+		},
+		{
+			"name": "WebSocket",
+			"item": [
+				{
+					"name": "WebSocket Connection Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/ws",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ws"
+							]
+						},
+						"description": "WebSocket endpoint for real-time sensor data updates. Use ws:// protocol for connection."
+					},
+					"response": []
+				}
+			],
+			"description": "WebSocket endpoint for real-time updates"
+		},
+		{
+			"name": "Health Check",
+			"item": [
+				{
+					"name": "Root Endpoint",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Health check endpoint"
+					},
+					"response": []
+				}
+			],
+			"description": "Server health check endpoints"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		}
+	]
+}
