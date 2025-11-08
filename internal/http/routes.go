@@ -5,13 +5,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/Capstone-E1/aquasmart_backend/internal/mqtt"
+	"github.com/Capstone-E1/aquasmart_backend/internal/ml"
 	"github.com/Capstone-E1/aquasmart_backend/internal/services"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
 	"github.com/Capstone-E1/aquasmart_backend/internal/ws"
 )
 
 // SetupRoutes configures all HTTP routes for the water purification API
-func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, scheduler *services.Scheduler, mqttClient *mqtt.Client) *chi.Mux {
+func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, scheduler *services.Scheduler, mqttClient *mqtt.Client, mlService *ml.MLService) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -30,9 +31,9 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, scheduler *services.S
 		MaxAge:           300,
 	}))
 
-	// Create handlers with scheduler and MQTT support
-	handlers := NewHandlers(dataStore, scheduler, mqttClient)
-
+	// Create handlers with scheduler, MQTT support, and ML service support
+	handlers := NewHandlers(dataStore, scheduler, mqttClient, mlService)
+	mlHandlers := NewMLHandlers(dataStore, mlService)
 	// Health check endpoint (outside /api/v1 for simplicity)
 	r.Get("/health", handlers.HealthCheck)
 	r.Head("/health", handlers.HealthCheck)
@@ -94,6 +95,35 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, scheduler *services.S
 			r.Delete("/{id}", handlers.DeleteSchedule)            // Delete schedule
 			r.Post("/{id}/toggle", handlers.ToggleSchedule)       // Enable/disable schedule
 			r.Get("/executions", handlers.GetScheduleExecutionHistory) // Execution history
+		})
+
+		// ML Features - Anomaly Detection & Filter Lifespan Prediction
+		r.Route("/ml", func(r chi.Router) {
+			// Dashboard - Overall ML metrics
+			r.Get("/dashboard", mlHandlers.GetMLDashboard)
+
+			// Filter Health & Lifespan Prediction
+			r.Get("/filter/health", mlHandlers.GetFilterHealth)
+			r.Post("/filter/analyze", mlHandlers.AnalyzeFilterHealth)
+
+			// Anomaly Detection
+			r.Get("/anomalies", mlHandlers.GetAnomalies)
+			r.Get("/anomalies/unresolved", mlHandlers.GetUnresolvedAnomalies)
+			r.Get("/anomalies/stats", mlHandlers.GetAnomalyStats)
+			r.Post("/anomalies/detect", mlHandlers.DetectAnomaliesNow)
+			r.Post("/anomalies/{id}/resolve", mlHandlers.ResolveAnomaly)
+			r.Post("/anomalies/{id}/false-positive", mlHandlers.MarkAnomalyFalsePositive)
+
+			// Baselines for anomaly detection
+			r.Get("/baselines", mlHandlers.GetBaselines)
+			r.Post("/baselines/calculate", mlHandlers.CalculateBaselines)
+
+			// Sensor Value Predictions (NEW)
+			r.Get("/predictions", mlHandlers.GetPredictions)
+			r.Post("/predictions/generate", mlHandlers.GeneratePredictions)
+			r.Get("/predictions/accuracy", mlHandlers.GetPredictionAccuracy)
+			r.Post("/predictions/update", mlHandlers.TriggerPredictionUpdate)
+			r.Get("/predictions/status", mlHandlers.GetPredictionStatus)
 		})
 
 		// Export routes for data history

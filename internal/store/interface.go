@@ -54,4 +54,31 @@ type DataStore interface {
 	GetScheduleExecutions(scheduleID int, limit int) ([]models.ScheduleExecution, error)
 	GetAllScheduleExecutions(limit int) ([]models.ScheduleExecution, error)
 	UpdateScheduleExecution(*models.ScheduleExecution) error
+
+	// ML: Anomaly Detection
+	SaveAnomaly(*models.AnomalyDetection) error
+	GetAnomalies(limit int) ([]models.AnomalyDetection, error)
+	GetAnomaliesByDevice(deviceID string, limit int) ([]models.AnomalyDetection, error)
+	GetAnomaliesBySeverity(severity string, limit int) ([]models.AnomalyDetection, error)
+	GetUnresolvedAnomalies() ([]models.AnomalyDetection, error)
+	ResolveAnomaly(id int) error
+	MarkAnomalyFalsePositive(id int) error
+	GetAnomalyStats() (*models.AnomalyStats, error)
+
+	// ML: Sensor Baselines
+	SaveBaseline(*models.SensorBaseline) error
+	GetBaseline(deviceID string, filterMode models.FilterMode) (*models.SensorBaseline, error)
+	GetAllBaselines() ([]models.SensorBaseline, error)
+	UpdateBaseline(*models.SensorBaseline) error
+
+	// ML: Filter Health
+	SaveFilterHealth(*models.FilterHealth) error
+	GetLatestFilterHealth(deviceID string) (*models.FilterHealth, error)
+	GetFilterHealthHistory(deviceID string, limit int) ([]models.FilterHealth, error)
+	GetAllFilterHealth() ([]models.FilterHealth, error)
+
+	// ML: Predictions
+	SavePrediction(*models.MLPrediction) error
+	GetPredictions(predictionType string, limit int) ([]models.MLPrediction, error)
+	GetPredictionsByDevice(deviceID string, limit int) ([]models.MLPrediction, error)
 }
