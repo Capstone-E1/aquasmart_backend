@@ -22,13 +22,15 @@ type ServerConfig struct {
 
 // MQTTConfig holds MQTT broker configuration
 type MQTTConfig struct {
-	BrokerURL    string
-	ClientID     string
-	Username     string
-	Password     string
-	KeepAlive    time.Duration
-	PingTimeout  time.Duration
-	ConnectRetry bool
+	BrokerURL          string
+	ClientID           string
+	Username           string
+	Password           string
+	KeepAlive          time.Duration
+	PingTimeout        time.Duration
+	ConnectRetry       bool
+	TopicSensorData    string
+	TopicFilterCommand string
 }
 
 // DatabaseConfig holds PostgreSQL database configuration
@@ -50,13 +52,15 @@ func Load() *Config {
 			WriteTimeout: getDurationEnv("SERVER_WRITE_TIMEOUT", 15*time.Second),
 		},
 		MQTT: MQTTConfig{
-			BrokerURL:    getEnv("MQTT_BROKER_URL", "tcp://localhost:1883"),
-			ClientID:     getEnv("MQTT_CLIENT_ID", "aquasmart_backend"),
-			Username:     getEnv("MQTT_USERNAME", ""),
-			Password:     getEnv("MQTT_PASSWORD", ""),
-			KeepAlive:    getDurationEnv("MQTT_KEEP_ALIVE", 30*time.Second),
-			PingTimeout:  getDurationEnv("MQTT_PING_TIMEOUT", 10*time.Second),
-			ConnectRetry: getBoolEnv("MQTT_CONNECT_RETRY", true),
+			BrokerURL:          getMQTTBrokerURL(),
+			ClientID:           getEnv("MQTT_CLIENT_ID", "aquasmart_backend"),
+			Username:           getEnv("MQTT_USERNAME", ""),
+			Password:           getEnv("MQTT_PASSWORD", ""),
+			KeepAlive:          getDurationEnv("MQTT_KEEP_ALIVE", 30*time.Second),
+			PingTimeout:        getDurationEnv("MQTT_PING_TIMEOUT", 10*time.Second),
+			ConnectRetry:       getBoolEnv("MQTT_CONNECT_RETRY", true),
+			TopicSensorData:    getEnv("MQTT_TOPIC_SENSOR_DATA", "aquasmart/sensors/data"),
+			TopicFilterCommand: getEnv("MQTT_TOPIC_FILTER_COMMAND", "aquasmart/filter/command"),
 		},
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
@@ -95,4 +99,16 @@ func getBoolEnv(key string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
+}
+
+// getMQTTBrokerURL returns MQTT broker URL with tcp:// prefix if not present
+// Supports both "localhost:1883" and "tcp://localhost:1883" formats
+func getMQTTBrokerURL() string {
+	broker := getEnv("MQTT_BROKER", getEnv("MQTT_BROKER_URL", "tcp://localhost:1883"))
+	
+	// If broker doesn't start with tcp://, add it
+	if broker != "" && broker[:4] != "tcp:" && broker[:3] != "ssl" {
+		return "tcp://" + broker
+	}
+	return broker
 }
