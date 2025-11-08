@@ -4,6 +4,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/Capstone-E1/aquasmart_backend/internal/mqtt"
 	"github.com/Capstone-E1/aquasmart_backend/internal/ml"
 	"github.com/Capstone-E1/aquasmart_backend/internal/services"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
@@ -11,7 +12,7 @@ import (
 )
 
 // SetupRoutes configures all HTTP routes for the water purification API
-func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, scheduler *services.Scheduler, mlService *ml.MLService) *chi.Mux {
+func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, scheduler *services.Scheduler, mqttClient *mqtt.Client, mlService *ml.MLService) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -30,9 +31,12 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, scheduler *services.S
 		MaxAge:           300,
 	}))
 
-	// Create handlers with scheduler and ML service support
-	handlers := NewHandlers(dataStore, scheduler, mlService)
+	// Create handlers with scheduler, MQTT support, and ML service support
+	handlers := NewHandlers(dataStore, scheduler, mqttClient, mlService)
 	mlHandlers := NewMLHandlers(dataStore, mlService)
+	// Health check endpoint (outside /api/v1 for simplicity)
+	r.Get("/health", handlers.HealthCheck)
+	r.Head("/health", handlers.HealthCheck)
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
@@ -74,17 +78,11 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, scheduler *services.S
 			// Device-specific routes
 			r.Get("/devices/latest", handlers.GetAllDevicesLatest)  // Get latest reading for all devices
 			r.Get("/devices/{deviceID}", handlers.GetDeviceReadings) // Get all readings for a specific device
-
-			// STM32/ESP32 specific endpoints
-			r.Post("/stm32", handlers.AddSTM32SensorData)           // POST data from STM32
-			r.Get("/stm32/command", handlers.GetSTM32Command)       // GET commands for STM32
-			r.Get("/stm32/mode", handlers.GetSTM32FilterModeSimple) // Simple text-only filter mode
-			r.Get("/stm32/led", handlers.GetSTM32LEDStatus)         // GET LED command: ON/OFF (for ESP32 polling)
-			r.Post("/stm32/led", handlers.SetLEDCommand)            // POST to set LED command (from Postman/Frontend)
 		})
 		
 		// Command routes for filter control
 		r.Route("/commands", func(r chi.Router) {
+			r.Get("/filter", handlers.GetFilterStatus)   // Get current filter status
 			r.Post("/filter", handlers.SetFilterMode)
 		})
 

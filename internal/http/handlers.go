@@ -7,12 +7,12 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Capstone-E1/aquasmart_backend/internal/export"
 	"github.com/Capstone-E1/aquasmart_backend/internal/ml"
 	"github.com/Capstone-E1/aquasmart_backend/internal/models"
+	"github.com/Capstone-E1/aquasmart_backend/internal/mqtt"
 	"github.com/Capstone-E1/aquasmart_backend/internal/services"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -23,15 +23,17 @@ type Handlers struct {
 	store         store.DataStore
 	exportService *export.ExportService
 	scheduler     *services.Scheduler
-	mlService     *ml.MLService
+	mqtt          *mqtt.Client
+  mlService     *ml.MLService
 }
 
 // NewHandlers creates a new handlers instance
-func NewHandlers(dataStore store.DataStore, scheduler *services.Scheduler, mlService *ml.MLService) *Handlers {
+func NewHandlers(dataStore store.DataStore, scheduler *services.Scheduler, mqttClient *mqtt.Client, mlService *ml.MLService) *Handlers {
 	return &Handlers{
 		store:         dataStore,
 		exportService: export.NewExportService(),
 		scheduler:     scheduler,
+		mqtt:          mqttClient,
 		mlService:     mlService,
 	}
 }
@@ -42,6 +44,27 @@ type APIResponse struct {
 	Message string      `json:"message,omitempty"`
 	Data    interface{} `json:"data,omitempty"`
 	Error   string      `json:"error,omitempty"`
+}
+
+// HealthCheck returns health status of the application
+func (h *Handlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	health := map[string]interface{}{
+		"status":    "healthy",
+		"timestamp": time.Now().UTC(),
+		"service":   "aquasmart-backend",
+	}
+
+	// Optional: Add database health check
+	if err := h.store.Ping(); err != nil {
+		health["status"] = "unhealthy"
+		health["database"] = "error"
+		w.WriteHeader(http.StatusServiceUnavailable)
+	} else {
+		health["database"] = "connected"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(health)
 }
 
 // GetLatestReadings returns the latest sensor readings (optionally filtered by mode or device)
@@ -309,219 +332,6 @@ func (h *Handlers) AddSensorData(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// AddSTM32SensorData handles POST requests from STM32 device
-// Endpoint: POST /api/v1/sensors/stm32
-func (h *Handlers) AddSTM32SensorData(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		DeviceID  string  `json:"device_id"`  // Device identifier: stm32_pre or stm32_post
-		Flow      float64 `json:"flow"`       // Flow sensor (digital)
-		Ph        float64 `json:"ph"`         // pH sensor (analog)
-		Turbidity float64 `json:"turbidity"`  // Turbidity sensor (analog)
-		TDS       float64 `json:"tds"`        // TDS sensor (analog)
-	}
-
-	// Parse request body
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		log.Printf("❌ STM32: Failed to parse request from %s: %v", r.RemoteAddr, err)
-		h.sendErrorResponse(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Log received data for debugging (raw voltage values)
-	log.Printf("📥 STM32: Received request from %s - device_id: '%s', flow: %.2f, ph_voltage: %.2fV, turbidity_voltage: %.2fV, tds_voltage: %.2fV", 
-		r.RemoteAddr, request.DeviceID, request.Flow, request.Ph, request.Turbidity, request.TDS)
-
-	// Validate device_id
-	if request.DeviceID == "" {
-		log.Printf("❌ STM32: device_id is empty from %s", r.RemoteAddr)
-		h.sendErrorResponse(w, "device_id is required", http.StatusBadRequest)
-		return
-	}
-
-	deviceIDLower := strings.ToLower(request.DeviceID)
-	if deviceIDLower != "stm32_pre" && deviceIDLower != "stm32_post" && deviceIDLower != "stm32_main" {
-		log.Printf("❌ STM32: Invalid device_id '%s' from %s", request.DeviceID, r.RemoteAddr)
-		h.sendErrorResponse(w, "Invalid device_id. Must be 'stm32_pre' or 'stm32_post'", http.StatusBadRequest)
-		return
-	}
-
-	// Get current filter mode from global setting (set by SetFilterMode endpoint)
-	// This ensures all devices use the same filter mode setting
-	filterMode := h.store.GetCurrentFilterMode()
-	log.Printf("📋 STM32 [%s]: Using global filter_mode '%s'", request.DeviceID, filterMode)
-
-	phValue := models.ConvertVoltageToPh(request.Ph)
-	turbidityValue := models.ConvertVoltageToTurbidity(request.Turbidity)
-	tdsValue := models.ConvertVoltageToTDS(request.TDS)
-	
-	log.Printf("🔄 STM32 [%s]: Converted values - pH: %.2f, Turbidity: %.2f NTU, TDS: %.2f PPM", 
-		request.DeviceID, phValue, turbidityValue, tdsValue)
-
-	reading := models.SensorReading{
-		DeviceID:   request.DeviceID,
-		Timestamp:  time.Now(),
-		FilterMode: filterMode,
-		Flow:       request.Flow,
-		Ph:         phValue,
-		Turbidity:  turbidityValue,
-		TDS:        tdsValue,
-	}
-
-	// Validate the reading
-	if !reading.ValidateReading() {
-		h.sendErrorResponse(w, "Invalid sensor reading values", http.StatusBadRequest)
-		return
-	}
-
-	// Store the reading
-	h.store.AddSensorReading(reading)
-
-	log.Printf("✅ STM32 [%s]: Stored sensor data - Flow: %.2f L/min, pH: %.2f, Turbidity: %.2f NTU, TDS: %.2f PPM",
-		request.DeviceID, request.Flow, phValue, turbidityValue, tdsValue)
-
-	// Process reading for ML analysis (anomaly detection & prediction updates)
-	if h.mlService != nil {
-		go h.mlService.ProcessNewReading(&reading)
-	}
-
-	// Return success response
-	response := APIResponse{
-		Success: true,
-		Message: "Data received",
-		Data: map[string]interface{}{
-			"device_id":   request.DeviceID,
-			"timestamp":   reading.Timestamp,
-			"filter_mode": filterMode,
-		},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// GetSTM32Command handles GET requests from STM32 to receive commands
-// Endpoint: GET /api/v1/sensors/stm32/command
-func (h *Handlers) GetSTM32Command(w http.ResponseWriter, r *http.Request) {
-	// Get current filter mode from global setting (set by SetFilterMode endpoint)
-	// This ensures consistency across all endpoints
-	filterMode := h.store.GetCurrentFilterMode()
-
-	// Get filter mode tracking info
-	filterModeInfo := h.store.GetFilterModeTracking()
-
-	// Get filtration process if any
-	process, processExists := h.store.GetFiltrationProcess()
-
-	// Prepare command response
-	commandData := map[string]interface{}{
-		"filter_mode": filterMode,
-		"timestamp":   time.Now(),
-	}
-
-	// Add filter mode tracking info if available
-	if filterModeInfo != nil {
-		commandData["filter_mode_started_at"] = filterModeInfo["started_at"]
-		commandData["filter_mode_duration_seconds"] = filterModeInfo["duration_seconds"]
-		commandData["total_flow_liters"] = filterModeInfo["total_flow_liters"]
-		commandData["statistics"] = filterModeInfo["statistics"]
-	}
-
-	if processExists {
-		commandData["filtration_active"] = process.State == models.FiltrationStateProcessing
-		commandData["filtration_state"] = process.State
-		commandData["target_volume"] = process.TargetVolume
-		commandData["processed_volume"] = process.ProcessedVolume
-	} else {
-		commandData["filtration_active"] = false
-	}
-
-	response := APIResponse{
-		Success: true,
-		Data:    commandData,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// GetSTM32FilterModeSimple returns ONLY the filter mode as plain text
-// This is simpler for STM32 to parse - no JSON, just the mode string
-// Endpoint: GET /api/v1/sensors/stm32/mode
-func (h *Handlers) GetSTM32FilterModeSimple(w http.ResponseWriter, r *http.Request) {
-	// Get current filter mode from global setting
-	filterMode := h.store.GetCurrentFilterMode()
-	
-	// Return as plain text (not JSON)
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Connection", "close")
-	w.Header().Set("Content-Length", strconv.Itoa(len(filterMode)))
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(filterMode))
-	
-	log.Printf("📤 STM32: Sent simple filter mode: %s", filterMode)
-}
-
-// GetSTM32LEDStatus returns LED command for ESP32/STM32 to poll
-// Returns: "ON" or "OFF" (PLAIN TEXT ONLY)
-// Endpoint: GET /api/v1/sensors/stm32/led
-func (h *Handlers) GetSTM32LEDStatus(w http.ResponseWriter, r *http.Request) {
-	// Derive LED state from GLOBAL filter mode:
-	// ON  -> drinking_water
-	// OFF -> household_water
-	filterMode := h.store.GetCurrentFilterMode()
-
-	ledText := "OFF"
-	if filterMode == models.FilterModeDrinking {
-		ledText = "ON"
-	}
-
-	// Return as plain text (not JSON) with explicit Content-Length for microcontroller parsers
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Connection", "close")
-	w.Header().Set("Content-Length", strconv.Itoa(len(ledText)))
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(ledText))
-
-	log.Printf("📤 ESP32 LED: Sent command: %s (derived from filter_mode=%s)", ledText, filterMode)
-}
-
-func (h *Handlers) SetLEDCommand(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		Action string `json:"action"` // "on" or "off"
-	}
-
-	// Parse request body
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		h.sendErrorResponse(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Validate action
-	action := strings.ToLower(request.Action)
-	if action != "on" && action != "off" {
-		h.sendErrorResponse(w, "Invalid action. Use 'on' or 'off'", http.StatusBadRequest)
-		return
-	}
-
-	// Store the LED command for ESP32/STM32 to poll via GET /api/v1/sensors/stm32/led
-	h.store.SetLEDCommand(action)
-
-	log.Printf("💡 LED Control: Command set - %s (ESP32 will poll this)", strings.ToUpper(action))
-
-	// Return success response
-	response := APIResponse{
-		Success: true,
-		Message: fmt.Sprintf("LED turned %s successfully", action),
-		Data: map[string]interface{}{
-			"led_command": strings.ToUpper(action),
-			"timestamp":   time.Now(),
-		},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
 // SetFilterMode handles POST requests to set the water filter mode
 func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 	var request struct {
@@ -601,6 +411,13 @@ func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 	// Update current filter mode in store
 	h.store.SetCurrentFilterMode(request.Mode)
 
+	// Publish filter command via MQTT
+	if h.mqtt != nil {
+		if err := h.mqtt.PublishFilterCommand(request.Mode); err != nil {
+			log.Printf("⚠️  Failed to publish filter command via MQTT: %v", err)
+		}
+	}
+
 	// Notify scheduler about manual override
 	if h.scheduler != nil {
 		overrideReason := request.OverrideReason
@@ -642,6 +459,29 @@ func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 		Data:    responseData,
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetFilterStatus handles GET requests to get current filter mode and statistics
+func (h *Handlers) GetFilterStatus(w http.ResponseWriter, r *http.Request) {
+	// Get current filter mode from all active devices
+	currentMode := h.store.GetCurrentFilterMode()
+	
+	// Get filter mode tracking with statistics
+	tracking := h.store.GetFilterModeTracking()
+	
+	// Build response with full tracking info
+	responseData := map[string]interface{}{
+		"current_mode":          currentMode,
+		"filter_mode_tracking":  tracking,
+	}
+	
+	response := APIResponse{
+		Success: true,
+		Data:    responseData,
+	}
+	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
