@@ -16,7 +16,7 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the application (force rebuild - no cache)
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/server
 
 # Runtime stage
