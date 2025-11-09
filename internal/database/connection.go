@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 
 	_ "github.com/lib/pq"
 	"github.com/Capstone-E1/aquasmart_backend/config"
@@ -16,11 +17,18 @@ type DB struct {
 
 // Connect establishes connection to PostgreSQL database
 func Connect(cfg config.DatabaseConfig) (*DB, error) {
-	// Build connection string for Aiven PostgreSQL with additional SSL parameters
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s sslrootcert=disable sslcert=disable sslkey=disable",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode)
-
-	log.Printf("Connecting to Aiven database at %s:%s/%s", cfg.Host, cfg.Port, cfg.DBName)
+	var connStr string
+	
+	// Check if DATABASE_URL is provided (e.g., from Render.com)
+	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
+		log.Println("Using DATABASE_URL from environment")
+		connStr = databaseURL
+	} else {
+		// Build connection string from individual config values
+		connStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode)
+		log.Printf("Connecting to database at %s:%s/%s", cfg.Host, cfg.Port, cfg.DBName)
+	}
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
