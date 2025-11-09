@@ -14,7 +14,7 @@ CLAUDE.md
 # Go binaries
 main
 aquasmart_backend
-server
+/server
 /bin/
 /build/
 *.test
