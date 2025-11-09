@@ -63,27 +63,35 @@ func main() {
 	go wsHub.Run()
 	log.Println("🔌 Started WebSocket hub")
 
-	// Initialize MQTT client
-	mqttTopics := map[string]string{
-		"sensor_data":    cfg.MQTT.TopicSensorData,
-		"filter_command": cfg.MQTT.TopicFilterCommand,
-	}
-	
-	mqttClient, err := mqtt.NewClient(
-		cfg.MQTT.BrokerURL,
-		cfg.MQTT.ClientID,
-		cfg.MQTT.Username,
-		cfg.MQTT.Password,
-		dataStore,
-		mqttTopics,
-	)
-	if err != nil {
-		log.Printf("⚠️  Warning: Failed to connect to MQTT broker: %v", err)
-		log.Println("📡 Continuing without MQTT support")
-		mqttClient = nil
+	// Initialize MQTT client (skip if no broker URL configured)
+	var mqttClient *mqtt.Client
+	if cfg.MQTT.BrokerURL != "" && cfg.MQTT.BrokerURL != "tcp://localhost:1883" {
+		log.Println("📡 Attempting to connect to MQTT broker...")
+		mqttTopics := map[string]string{
+			"sensor_data":    cfg.MQTT.TopicSensorData,
+			"filter_command": cfg.MQTT.TopicFilterCommand,
+		}
+		
+		client, err := mqtt.NewClient(
+			cfg.MQTT.BrokerURL,
+			cfg.MQTT.ClientID,
+			cfg.MQTT.Username,
+			cfg.MQTT.Password,
+			dataStore,
+			mqttTopics,
+		)
+		if err != nil {
+			log.Printf("⚠️  Warning: Failed to connect to MQTT broker: %v", err)
+			log.Println("📡 Continuing without MQTT support")
+			mqttClient = nil
+		} else {
+			log.Printf("📡 MQTT client connected - Broker: %s", cfg.MQTT.BrokerURL)
+			mqttClient = client
+			defer mqttClient.Disconnect()
+		}
 	} else {
-		log.Printf("📡 MQTT client connected - Broker: %s", cfg.MQTT.BrokerURL)
-		defer mqttClient.Disconnect()
+		log.Println("📡 MQTT broker not configured, skipping MQTT initialization")
+		mqttClient = nil
 	}
 
 	// Initialize and start scheduler
