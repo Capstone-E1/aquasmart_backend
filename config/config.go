@@ -101,14 +101,29 @@ func getBoolEnv(key string, defaultValue bool) bool {
 	return defaultValue
 }
 
-// getMQTTBrokerURL returns MQTT broker URL with tcp:// prefix if not present
-// Supports both "localhost:1883" and "tcp://localhost:1883" formats
+// getMQTTBrokerURL returns MQTT broker URL with appropriate scheme prefix
+// Supports tcp://, tls://, ssl:// schemes and auto-detects based on MQTT_USE_TLS
 func getMQTTBrokerURL() string {
 	broker := getEnv("MQTT_BROKER", getEnv("MQTT_BROKER_URL", "tcp://localhost:1883"))
 	
-	// If broker doesn't start with tcp://, add it
-	if broker != "" && broker[:4] != "tcp:" && broker[:3] != "ssl" {
-		return "tcp://" + broker
+	// If broker already has a scheme, return as-is
+	if len(broker) >= 6 {
+		if broker[:6] == "tcp://" || broker[:6] == "tls://" || broker[:6] == "ssl://" {
+			return broker
+		}
 	}
-	return broker
+	if len(broker) >= 7 && broker[:7] == "tcps://" {
+		return broker
+	}
+	
+	// Auto-detect scheme based on MQTT_USE_TLS setting
+	useTLS := getBoolEnv("MQTT_USE_TLS", false)
+	
+	if useTLS {
+		// Use TLS/SSL for encrypted connections (HiveMQ Cloud, etc.)
+		return "tls://" + broker
+	}
+	
+	// Default to TCP for unencrypted local connections
+	return "tcp://" + broker
 }
