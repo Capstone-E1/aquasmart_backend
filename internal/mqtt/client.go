@@ -1,6 +1,7 @@
 package mqtt
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -22,9 +23,12 @@ type Client struct {
 // NewClient creates and connects a new MQTT client
 func NewClient(brokerURL, clientID, username, password string, dataStore store.DataStore, topics map[string]string) (*Client, error) {
 	opts := MQTT.NewClientOptions()
+	
+	// Add broker URL - support both tcp:// and tls:// schemes
 	opts.AddBroker(brokerURL)
 	opts.SetClientID(clientID)
 	
+	// Set credentials
 	if username != "" {
 		opts.SetUsername(username)
 	}
@@ -32,14 +36,29 @@ func NewClient(brokerURL, clientID, username, password string, dataStore store.D
 		opts.SetPassword(password)
 	}
 	
+	// Configure TLS for secure connections (HiveMQ Cloud uses TLS on port 8883)
+	// This will automatically use TLS if the broker URL uses tls:// or ssl:// scheme
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: false, // Set to true only for testing with self-signed certs
+		MinVersion:         tls.VersionTLS12,
+	}
+	opts.SetTLSConfig(tlsConfig)
+	
+	// Set callbacks
 	opts.SetDefaultPublishHandler(messageHandler)
 	opts.SetOnConnectHandler(onConnect)
 	opts.SetConnectionLostHandler(onConnectionLost)
+	
+	// Connection settings
 	opts.SetAutoReconnect(true)
 	opts.SetConnectRetry(true)
 	opts.SetKeepAlive(30 * time.Second)
 	opts.SetPingTimeout(10 * time.Second)
+	opts.SetConnectTimeout(30 * time.Second) // Add connection timeout
+	opts.SetWriteTimeout(10 * time.Second)
 
+	log.Printf("🔌 Connecting to MQTT broker: %s", brokerURL)
+	
 	client := MQTT.NewClient(opts)
 	token := client.Connect()
 	token.Wait()
