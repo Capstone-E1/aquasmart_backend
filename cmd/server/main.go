@@ -142,7 +142,7 @@ func main() {
 		log.Println("  GET /api/v1/export/history.xlsx - Export history to Excel")
 		log.Println("  GET /api/v1/export/history.csv - Export history to CSV")
 		log.Println("  WS /ws - WebSocket for real-time updates")
-		log.Printf("🌐 Server running at http://localhost:%s", cfg.Server.Port)
+		log.Printf("🌐 Server running on port %s (listening on all interfaces)", cfg.Server.Port)
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("❌ HTTP server failed to start: %v", err)
