@@ -1,14 +1,9 @@
 package models
 
 import (
-	"math"
 	"testing"
 	"time"
 )
-
-func abs(f float64) float64 {
-	return math.Abs(f)
-}
 
 func TestNewFiltrationProcess(t *testing.T) {
 	targetVolume := 5.0

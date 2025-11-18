@@ -21,28 +21,29 @@ type MLService struct {
 	running         bool
 
 	// Configuration
-	baselineUpdateInterval    time.Duration
-	healthAnalysisInterval    time.Duration
-	predictionUpdateInterval  time.Duration
-	enableRealTimeAnomaly     bool
+	baselineUpdateInterval     time.Duration
+	healthAnalysisInterval     time.Duration
+	predictionUpdateInterval   time.Duration
+	enableRealTimeAnomaly      bool
 	enableAutoPredictionUpdate bool
 }
 
 // NewMLService creates a new ML service
 func NewMLService(dataStore store.DataStore) *MLService {
 	return &MLService{
-		store:                     dataStore,
-		anomalyDetector:           NewAnomalyDetector(),
-		filterPredictor:           NewFilterPredictor(),
-		sensorPredictor:           NewSensorPredictor(),
-		stopChan:                  make(chan struct{}),
-		baselineUpdateInterval:    1 * time.Hour,   // Update baselines every hour
-		healthAnalysisInterval:    30 * time.Minute, // Analyze filter health every 30 minutes
-		predictionUpdateInterval:  2 * time.Hour,    // Update predictions every 2 hours
-		enableRealTimeAnomaly:     true,
+		store:                      dataStore,
+		anomalyDetector:            NewAnomalyDetector(),
+		filterPredictor:            NewFilterPredictor(),
+		sensorPredictor:            NewSensorPredictor(),
+		stopChan:                   make(chan struct{}),
+		baselineUpdateInterval:     1 * time.Hour,   // Update baselines every hour
+		healthAnalysisInterval:     30 * time.Minute, // Analyze filter health every 30 minutes
+		predictionUpdateInterval:   2 * time.Hour,    // Update predictions every 2 hours
+		enableRealTimeAnomaly:      true,
 		enableAutoPredictionUpdate: true,
 	}
 }
+
 
 // Start begins the ML service background tasks
 func (s *MLService) Start() {
@@ -54,7 +55,7 @@ func (s *MLService) Start() {
 	s.running = true
 	s.mu.Unlock()
 
-	log.Println("🤖 Starting ML Service...")
+	log.Println("🤖 Starting ML Service (using statistical methods with linear regression)...")
 
 	// Start baseline update task
 	s.wg.Add(1)

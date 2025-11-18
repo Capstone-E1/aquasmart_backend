@@ -10,21 +10,22 @@ import (
 
 // FilterPredictor provides filter lifespan prediction and health assessment
 type FilterPredictor struct {
-	minDataPoints        int     // Minimum readings needed for prediction
-	degradationThreshold float64 // Efficiency drop threshold for concern
-	maxFilterLifeDays    int     // Maximum filter lifespan in days
+	minDataPoints         int     // Minimum readings needed for prediction
+	degradationThreshold  float64 // Efficiency drop threshold for concern
+	maxFilterLifeDays     int     // Maximum filter lifespan in days
 	maxFilterVolumeLiters float64 // Maximum volume before replacement (liters)
 }
 
 // NewFilterPredictor creates a new filter predictor
 func NewFilterPredictor() *FilterPredictor {
 	return &FilterPredictor{
-		minDataPoints:         20,      // Need at least 20 pre/post reading pairs
-		degradationThreshold:  10.0,    // 10% efficiency drop is concerning
-		maxFilterLifeDays:     180,     // 6 months maximum filter life
+		minDataPoints:         20,       // Need at least 20 pre/post reading pairs
+		degradationThreshold:  10.0,     // 10% efficiency drop is concerning
+		maxFilterLifeDays:     180,      // 6 months maximum filter life
 		maxFilterVolumeLiters: 100000.0, // 100,000 liters capacity
 	}
 }
+
 
 // AnalyzeFilterHealth performs comprehensive filter health analysis
 func (fp *FilterPredictor) AnalyzeFilterHealth(
@@ -76,6 +77,15 @@ func (fp *FilterPredictor) AnalyzeFilterHealth(
 		trend,
 		preReadings,
 	)
+
+	// Safety check: Ensure consistency between health score and days remaining
+	// Critical health (< 30) should have low days remaining (< 14)
+	// Poor health (< 50) should have moderate days remaining (< 30)
+	if healthScore < 30 && daysRemaining > 14 {
+		daysRemaining = 7 // Force urgent replacement
+	} else if healthScore < 50 && daysRemaining > 30 {
+		daysRemaining = 21 // Force replacement within 3 weeks
+	}
 
 	// Generate recommendations
 	recommendations := fp.generateRecommendations(
@@ -175,11 +185,20 @@ func (fp *FilterPredictor) calculateAverageReduction(pairs []struct {
 			postValue = pair.post.TDS
 		}
 
-		if preValue > 0 {
+		// Validate that pre-filtration value is greater than post-filtration
+		// If not, it might indicate sensor issues or swapped sensors
+		if preValue > 0 && postValue >= 0 {
 			reduction := ((preValue - postValue) / preValue) * 100
-			if reduction > 0 { // Only count positive reductions
+
+			// Only count realistic positive reductions (0-100%)
+			// Values > 100% indicate data issues
+			if reduction > 0 && reduction <= 100 {
 				totalReduction += reduction
 				count++
+			} else if reduction > 100 {
+				// Log warning about unrealistic reduction (possible sensor swap)
+				fmt.Printf("⚠️  Warning: Unrealistic %s reduction %.1f%% (pre: %.2f, post: %.2f) - possible sensor issue\n",
+					metric, reduction, preValue, postValue)
 			}
 		}
 	}
@@ -201,6 +220,7 @@ func (fp *FilterPredictor) calculatePhStabilization(pairs []struct {
 	}
 
 	totalImprovement := 0.0
+	count := 0
 	targetPh := 7.0
 
 	for _, pair := range pairs {
@@ -209,11 +229,20 @@ func (fp *FilterPredictor) calculatePhStabilization(pairs []struct {
 
 		if preDeviation > 0 {
 			improvement := ((preDeviation - postDeviation) / preDeviation) * 100
-			totalImprovement += improvement
+			// Only count positive improvements (pH moving closer to neutral)
+			if improvement > 0 {
+				totalImprovement += improvement
+				count++
+			}
 		}
 	}
 
-	return totalImprovement / float64(len(pairs))
+	// Return 0 if no improvements were found
+	if count == 0 {
+		return 0.0
+	}
+
+	return totalImprovement / float64(count)
 }
 
 // detectTrend analyzes efficiency trend over time
@@ -303,17 +332,33 @@ func (fp *FilterPredictor) predictRemainingDays(
 
 	// Minimum acceptable efficiency before replacement
 	minEfficiency := 30.0
+	warningEfficiency := 50.0
 
+	// Immediate replacement if below minimum
 	if currentEfficiency < minEfficiency {
-		return 0 // Immediate replacement
+		return 0
+	}
+
+	// If efficiency is low (30-50%), assign low days remaining even if no degradation detected
+	if currentEfficiency < warningEfficiency {
+		// Critical zone: 7-30 days based on how close to minimum
+		progressToMin := (currentEfficiency - minEfficiency) / (warningEfficiency - minEfficiency)
+		return int(7 + (progressToMin * 23)) // 7 days at 30%, 30 days at 50%
 	}
 
 	// Calculate degradation rate
 	degradationRate := fp.calculateDegradationRate(efficiencies)
 
 	if degradationRate <= 0 {
-		// No degradation detected, assume 90 days
-		return 90
+		// No degradation detected, but efficiency is good
+		// Return days based on current efficiency level
+		if currentEfficiency > 80 {
+			return 120 // Excellent condition
+		} else if currentEfficiency > 70 {
+			return 90 // Good condition
+		} else {
+			return 60 // Moderate condition
+		}
 	}
 
 	// Calculate days until efficiency drops below threshold
@@ -339,37 +384,48 @@ func (fp *FilterPredictor) predictRemainingDays(
 	return daysRemaining
 }
 
-// calculateDegradationRate calculates efficiency loss per day
+// calculateDegradationRate calculates efficiency loss per day using linear regression
 func (fp *FilterPredictor) calculateDegradationRate(efficiencies []float64) float64 {
 	if len(efficiencies) < 5 {
 		return 0.0
 	}
 
-	// Use linear regression to estimate degradation
-	n := len(efficiencies)
-	firstQuarter := efficiencies[:n/4]
-	lastQuarter := efficiencies[3*n/4:]
+	n := float64(len(efficiencies))
 
-	firstAvg := fp.calculateMean(firstQuarter)
-	lastAvg := fp.calculateMean(lastQuarter)
+	// Perform simple linear regression: y = mx + b
+	// where y = efficiency, x = time index
+	// We want to find the slope (m) which represents degradation rate
 
-	efficiencyDrop := firstAvg - lastAvg
+	var sumX, sumY, sumXY, sumX2 float64
 
-	// Assume readings span proportional time
-	// This is a simplification - in production, use actual timestamps
-	estimatedDays := float64(n) / 24.0 // Assuming hourly readings
+	for i, efficiency := range efficiencies {
+		x := float64(i)
+		sumX += x
+		sumY += efficiency
+		sumXY += x * efficiency
+		sumX2 += x * x
+	}
 
-	if estimatedDays == 0 {
+	// Calculate slope using least squares method
+	// slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+	denominator := n*sumX2 - sumX*sumX
+	if denominator == 0 {
 		return 0.0
 	}
 
-	degradationRate := efficiencyDrop / estimatedDays
+	slope := (n*sumXY - sumX*sumY) / denominator
 
-	if degradationRate < 0 {
-		return 0.0 // Filter improving, not degrading
+	// Convert slope from per-reading to per-day
+	// Assuming readings are taken hourly
+	readingsPerDay := 24.0
+	degradationRatePerDay := -slope * readingsPerDay // Negative because we want degradation (efficiency loss)
+
+	// If slope is positive (efficiency improving), return 0
+	if degradationRatePerDay < 0 {
+		return 0.0
 	}
 
-	return degradationRate
+	return degradationRatePerDay
 }
 
 // generateRecommendations creates actionable recommendations
@@ -421,13 +477,14 @@ func (fp *FilterPredictor) generateRecommendations(
 // Enhanced prediction methods combining multiple factors
 
 // predictRemainingDaysEnhanced uses multiple factors for better prediction
+// Uses statistical methods with linear regression for degradation rate
 func (fp *FilterPredictor) predictRemainingDaysEnhanced(
 	efficiencies []float64,
 	currentEfficiency float64,
 	trend string,
 	readings []models.SensorReading,
 ) int {
-	// Get base prediction from efficiency degradation
+	// Get base prediction from efficiency degradation using linear regression
 	efficiencyBasedDays := fp.predictRemainingDays(efficiencies, currentEfficiency, trend)
 
 	// Calculate flow-based prediction
@@ -439,8 +496,8 @@ func (fp *FilterPredictor) predictRemainingDaysEnhanced(
 	// Combine predictions with weighted average
 	// Efficiency: 50%, Flow: 30%, Age: 20%
 	weightedDays := (float64(efficiencyBasedDays) * 0.5) +
-	                (float64(flowBasedDays) * 0.3) +
-	                (float64(ageBasedDays) * 0.2)
+		(float64(flowBasedDays) * 0.3) +
+		(float64(ageBasedDays) * 0.2)
 
 	finalDays := int(weightedDays)
 
@@ -462,6 +519,7 @@ func (fp *FilterPredictor) predictRemainingDaysEnhanced(
 
 	return finalDays
 }
+
 
 // predictByFlowVolume predicts remaining days based on water volume processed
 func (fp *FilterPredictor) predictByFlowVolume(readings []models.SensorReading) int {
