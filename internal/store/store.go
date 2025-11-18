@@ -3,7 +3,6 @@ package store
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,7 +18,6 @@ type Store struct {
 	latestByDevice          map[string]*models.SensorReading // Latest reading per device
 	currentFilterMode       models.FilterMode               // Current active filter mode
 	filtrationProcess       *models.FiltrationProcess       // Current filtration process state
-	ledCommand              string                          // Current LED command (ON/OFF)
 	maxReadings             int
 	mlData                  *mlStore                        // ML-related data storage
 }
@@ -36,10 +34,14 @@ func NewStore(maxReadings int) *Store {
 		latestByMode:      make(map[models.FilterMode]*models.SensorReading),
 		latestByDevice:    make(map[string]*models.SensorReading),
 		currentFilterMode: models.FilterModeDrinking, // Default to drinking water mode
-		ledCommand:        "OFF",                     // Default LED is OFF
 		maxReadings:       maxReadings,
 		mlData:            newMLStore(),              // Initialize ML data storage
 	}
+}
+
+// Ping checks if store is accessible (always returns nil for in-memory store)
+func (s *Store) Ping() error {
+	return nil
 }
 
 // AddSensorReading stores a new sensor reading
@@ -455,22 +457,6 @@ func (s *Store) ClearFiltrationProcess() {
 	defer s.mu.Unlock()
 
 	s.filtrationProcess = nil
-}
-
-// SetLEDCommand sets the LED command for STM32 to poll
-func (s *Store) SetLEDCommand(command string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.ledCommand = strings.ToUpper(command)
-}
-
-// GetLEDCommand retrieves the current LED command
-func (s *Store) GetLEDCommand() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return s.ledCommand
 }
 
 // ===== Schedule Management Methods (Stub - Not implemented for in-memory store) =====

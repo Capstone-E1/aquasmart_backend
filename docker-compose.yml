@@ -1,42 +1,63 @@
-version: '3.8'
-
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: aquasmart_postgres
+  # Mosquitto removed - now using HiveMQ Cloud for global access
+  # Uncomment the mosquitto service below if you want to use local MQTT for development
+  
+  # mosquitto:
+  #   image: eclipse-mosquitto:2.0
+  #   container_name: aquasmart_mosquitto
+  #   restart: unless-stopped
+  #   ports:
+  #     - "1883:1883"
+  #     - "9001:9001"
+  #   volumes:
+  #     - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+  #     - mosquitto_data:/mosquitto/data
+  #     - mosquitto_log:/mosquitto/log
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aquasmart_backend
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: aquasmart
-      POSTGRES_USER: aquasmart_user
-      POSTGRES_PASSWORD: aquasmart_password
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
     ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d/
+      - "8080:8080"
+    environment:
+      # Database Configuration
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSLMODE: ${DB_SSLMODE:-require}
+      
+      # HiveMQ Cloud MQTT Configuration
+      MQTT_BROKER: ${MQTT_BROKER_URL}
+      MQTT_BROKER_URL: ${MQTT_BROKER_URL}
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+      MQTT_USE_TLS: ${MQTT_USE_TLS:-true}
+      MQTT_CLIENT_ID: ${MQTT_CLIENT_ID}
+      MQTT_TOPIC_SENSOR_DATA: ${MQTT_TOPIC_SENSOR_DATA}
+      MQTT_TOPIC_FILTER_COMMAND: ${MQTT_TOPIC_FILTER_COMMAND}
+      
+      # Server Configuration
+      SERVER_PORT: 8080
+    # Removed dependency on mosquitto since using HiveMQ Cloud
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aquasmart_user -d aquasmart"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Optional: pgAdmin for database management (web interface)
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: aquasmart_pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@aquasmart.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-    ports:
-      - "8081:80"
-    depends_on:
-      - postgres
-    profiles:
-      - admin  # Only start when explicitly requested
-
-volumes:
-  postgres_data:
-    driver: local
+# Volumes for Mosquitto (commented out, can be removed if not needed)
+# volumes:
+#   mosquitto_data:
+#     driver: local
+#   mosquitto_log:
+#     driver: local

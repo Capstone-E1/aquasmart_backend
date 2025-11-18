@@ -20,6 +20,11 @@ func NewDatabaseStore(db *sql.DB) *DatabaseStore {
 	return &DatabaseStore{db: db}
 }
 
+// Ping checks if database connection is alive
+func (s *DatabaseStore) Ping() error {
+	return s.db.Ping()
+}
+
 // AddSensorReading stores a sensor reading in the database
 func (s *DatabaseStore) AddSensorReading(reading models.SensorReading) {
 	query := `

@@ -22,13 +22,15 @@ type ServerConfig struct {
 
 // MQTTConfig holds MQTT broker configuration
 type MQTTConfig struct {
-	BrokerURL    string
-	ClientID     string
-	Username     string
-	Password     string
-	KeepAlive    time.Duration
-	PingTimeout  time.Duration
-	ConnectRetry bool
+	BrokerURL          string
+	ClientID           string
+	Username           string
+	Password           string
+	KeepAlive          time.Duration
+	PingTimeout        time.Duration
+	ConnectRetry       bool
+	TopicSensorData    string
+	TopicFilterCommand string
 }
 
 // DatabaseConfig holds PostgreSQL database configuration
@@ -50,13 +52,15 @@ func Load() *Config {
 			WriteTimeout: getDurationEnv("SERVER_WRITE_TIMEOUT", 15*time.Second),
 		},
 		MQTT: MQTTConfig{
-			BrokerURL:    getEnv("MQTT_BROKER_URL", "tcp://localhost:1883"),
-			ClientID:     getEnv("MQTT_CLIENT_ID", "aquasmart_backend"),
-			Username:     getEnv("MQTT_USERNAME", ""),
-			Password:     getEnv("MQTT_PASSWORD", ""),
-			KeepAlive:    getDurationEnv("MQTT_KEEP_ALIVE", 30*time.Second),
-			PingTimeout:  getDurationEnv("MQTT_PING_TIMEOUT", 10*time.Second),
-			ConnectRetry: getBoolEnv("MQTT_CONNECT_RETRY", true),
+			BrokerURL:          getMQTTBrokerURL(),
+			ClientID:           getEnv("MQTT_CLIENT_ID", "aquasmart_backend"),
+			Username:           getEnv("MQTT_USERNAME", ""),
+			Password:           getEnv("MQTT_PASSWORD", ""),
+			KeepAlive:          getDurationEnv("MQTT_KEEP_ALIVE", 30*time.Second),
+			PingTimeout:        getDurationEnv("MQTT_PING_TIMEOUT", 10*time.Second),
+			ConnectRetry:       getBoolEnv("MQTT_CONNECT_RETRY", true),
+			TopicSensorData:    getEnv("MQTT_TOPIC_SENSOR_DATA", "aquasmart/sensors/data"),
+			TopicFilterCommand: getEnv("MQTT_TOPIC_FILTER_COMMAND", "aquasmart/filter/command"),
 		},
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
@@ -95,4 +99,31 @@ func getBoolEnv(key string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
+}
+
+// getMQTTBrokerURL returns MQTT broker URL with appropriate scheme prefix
+// Supports tcp://, tls://, ssl:// schemes and auto-detects based on MQTT_USE_TLS
+func getMQTTBrokerURL() string {
+	broker := getEnv("MQTT_BROKER", getEnv("MQTT_BROKER_URL", "tcp://localhost:1883"))
+	
+	// If broker already has a scheme, return as-is
+	if len(broker) >= 6 {
+		if broker[:6] == "tcp://" || broker[:6] == "tls://" || broker[:6] == "ssl://" {
+			return broker
+		}
+	}
+	if len(broker) >= 7 && broker[:7] == "tcps://" {
+		return broker
+	}
+	
+	// Auto-detect scheme based on MQTT_USE_TLS setting
+	useTLS := getBoolEnv("MQTT_USE_TLS", false)
+	
+	if useTLS {
+		// Use TLS/SSL for encrypted connections (HiveMQ Cloud, etc.)
+		return "tls://" + broker
+	}
+	
+	// Default to TCP for unencrypted local connections
+	return "tcp://" + broker
 }

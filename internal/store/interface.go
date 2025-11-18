@@ -7,6 +7,9 @@ import (
 
 // DataStore defines the interface for data storage operations
 type DataStore interface {
+	// Health check
+	Ping() error
+	
 	AddSensorReading(models.SensorReading)
 	GetLatestReading() (*models.SensorReading, bool)
 	GetLatestReadingByMode(models.FilterMode) (*models.SensorReading, bool)
@@ -36,10 +39,6 @@ type DataStore interface {
 	ClearFiltrationProcess()  // Force clear any filtration process
 	CanChangeFilterMode() (bool, string)
 	ClearCompletedProcess()
-
-	// LED control commands
-	SetLEDCommand(string)
-	GetLEDCommand() string
 
 	// Schedule management
 	CreateSchedule(*models.FilterSchedule) error
