@@ -262,6 +262,26 @@ func (h *Handlers) GetSystemStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// DeleteAllSensorData deletes all sensor readings from the database
+func (h *Handlers) DeleteAllSensorData(w http.ResponseWriter, r *http.Request) {
+	// Call the store method to delete all sensor readings
+	err := h.store.DeleteAllSensorReadings()
+	if err != nil {
+		h.sendErrorResponse(w, fmt.Sprintf("Failed to delete sensor data: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	response := APIResponse{
+		Success: true,
+		Data: map[string]string{
+			"message": "All sensor data has been deleted successfully",
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 // sendErrorResponse sends a standardized error response
 func (h *Handlers) sendErrorResponse(w http.ResponseWriter, message string, statusCode int) {
 	response := APIResponse{

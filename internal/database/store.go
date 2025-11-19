@@ -520,6 +520,26 @@ func (s *DatabaseStore) GetReadingCount() int {
 	return count
 }
 
+// DeleteAllSensorReadings removes all sensor readings from the database
+func (s *DatabaseStore) DeleteAllSensorReadings() error {
+	query := `DELETE FROM sensor_readings`
+
+	result, err := s.db.Exec(query)
+	if err != nil {
+		log.Printf("❌ Error deleting all sensor readings: %v", err)
+		return fmt.Errorf("failed to delete sensor readings: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("⚠️  Warning: Could not get rows affected count: %v", err)
+	} else {
+		log.Printf("✅ Deleted %d sensor readings from database", rowsAffected)
+	}
+
+	return nil
+}
+
 // GetCurrentFilterMode returns the current filter mode setting
 func (s *DatabaseStore) GetCurrentFilterMode() models.FilterMode {
 	var filterMode string
