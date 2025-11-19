@@ -79,12 +79,28 @@ func (fp *FilterPredictor) AnalyzeFilterHealth(
 	)
 
 	// Safety check: Ensure consistency between health score and days remaining
-	// Critical health (< 30) should have low days remaining (< 14)
-	// Poor health (< 50) should have moderate days remaining (< 30)
-	if healthScore < 30 && daysRemaining > 14 {
-		daysRemaining = 7 // Force urgent replacement
-	} else if healthScore < 50 && daysRemaining > 30 {
-		daysRemaining = 21 // Force replacement within 3 weeks
+	// This prevents illogical predictions where critical health shows high days remaining
+	// Critical health (< 30) should have urgent replacement (0-7 days)
+	// Poor health (30-50) should have low days remaining (7-21 days)
+	// Fair health (50-70) should have moderate days remaining (21-60 days)
+	if healthScore < 30 {
+		// Critical: Force immediate to urgent replacement (0-7 days)
+		if daysRemaining > 7 {
+			daysRemaining = int(healthScore / 30.0 * 7.0) // Scale 0-7 days based on score
+			if daysRemaining < 3 {
+				daysRemaining = 3 // Minimum 3 days to allow planning
+			}
+		}
+	} else if healthScore < 50 {
+		// Poor: Force replacement within 7-21 days
+		if daysRemaining > 21 {
+			daysRemaining = 7 + int((healthScore-30.0)/20.0*14.0) // Scale 7-21 days
+		}
+	} else if healthScore < 70 {
+		// Fair: Cap at 60 days
+		if daysRemaining > 60 {
+			daysRemaining = 21 + int((healthScore-50.0)/20.0*39.0) // Scale 21-60 days
+		}
 	}
 
 	// Generate recommendations
@@ -172,6 +188,7 @@ func (fp *FilterPredictor) calculateAverageReduction(pairs []struct {
 
 	totalReduction := 0.0
 	count := 0
+	negativeCount := 0 // Track cases where post > pre (filter making things worse)
 
 	for _, pair := range pairs {
 		var preValue, postValue float64
@@ -185,29 +202,46 @@ func (fp *FilterPredictor) calculateAverageReduction(pairs []struct {
 			postValue = pair.post.TDS
 		}
 
-		// Validate that pre-filtration value is greater than post-filtration
-		// If not, it might indicate sensor issues or swapped sensors
+		// Validate that pre-filtration value exists
 		if preValue > 0 && postValue >= 0 {
 			reduction := ((preValue - postValue) / preValue) * 100
 
 			// Only count realistic positive reductions (0-100%)
-			// Values > 100% indicate data issues
 			if reduction > 0 && reduction <= 100 {
 				totalReduction += reduction
 				count++
+			} else if reduction < 0 {
+				// Negative reduction means post > pre (water getting WORSE)
+				negativeCount++
+				fmt.Printf("⚠️  Warning: Negative %s reduction %.1f%% (pre: %.2f, post: %.2f) - filter may be contaminated or sensors swapped\n",
+					metric, reduction, preValue, postValue)
 			} else if reduction > 100 {
-				// Log warning about unrealistic reduction (possible sensor swap)
+				// Unrealistic reduction (possible sensor swap)
 				fmt.Printf("⚠️  Warning: Unrealistic %s reduction %.1f%% (pre: %.2f, post: %.2f) - possible sensor issue\n",
 					metric, reduction, preValue, postValue)
 			}
 		}
 	}
 
+	// If more than 50% of readings show negative reduction, return 0
+	// This indicates serious sensor or filter issues
+	if negativeCount > len(pairs)/2 {
+		fmt.Printf("⚠️  CRITICAL: Majority of readings show negative %s reduction - check sensor placement and filter condition\n", metric)
+		return 0.0
+	}
+
 	if count == 0 {
 		return 0.0
 	}
 
-	return totalReduction / float64(count)
+	avgReduction := totalReduction / float64(count)
+
+	// Final safety check: ensure result is never negative
+	if avgReduction < 0 {
+		return 0.0
+	}
+
+	return avgReduction
 }
 
 // calculatePhStabilization measures how well pH is stabilized to neutral
@@ -230,7 +264,8 @@ func (fp *FilterPredictor) calculatePhStabilization(pairs []struct {
 		if preDeviation > 0 {
 			improvement := ((preDeviation - postDeviation) / preDeviation) * 100
 			// Only count positive improvements (pH moving closer to neutral)
-			if improvement > 0 {
+			// Clamp between 0-100% to avoid negative or unrealistic values
+			if improvement > 0 && improvement <= 100 {
 				totalImprovement += improvement
 				count++
 			}
@@ -242,7 +277,14 @@ func (fp *FilterPredictor) calculatePhStabilization(pairs []struct {
 		return 0.0
 	}
 
-	return totalImprovement / float64(count)
+	avgImprovement := totalImprovement / float64(count)
+
+	// Ensure result is never negative
+	if avgImprovement < 0 {
+		return 0.0
+	}
+
+	return avgImprovement
 }
 
 // detectTrend analyzes efficiency trend over time
