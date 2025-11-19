@@ -1082,13 +1082,25 @@ func (h *Handlers) GetBestDailyValues(w http.ResponseWriter, r *http.Request) {
 	// Get all readings for today
 	readings := h.store.GetReadingsInRange(startOfDay, endOfDay)
 
-	if len(readings) == 0 {
-		h.sendErrorResponse(w, "No sensor data found for today", http.StatusNotFound)
-		return
-	}
+	var bestValues BestDailyValues
 
-	// Calculate best values
-	bestValues := calculateBestValues(readings)
+	if len(readings) == 0 {
+		// Return default values instead of 404 error when no data exists
+		bestValues = BestDailyValues{
+			Date:            now.Format("2006-01-02"),
+			FilterMode:      "drinking_water",
+			BestPH:          7.0,
+			BestTDS:         400,
+			BestTurbidity:   0.5,
+			BestFlow:        2.5,
+			TotalReadings:   0,
+			OverallQuality:  "No Data",
+			Summary:         "No sensor data available for today.",
+		}
+	} else {
+		// Calculate best values from actual readings
+		bestValues = calculateBestValues(readings)
+	}
 
 	response := APIResponse{
 		Success: true,
@@ -1166,13 +1178,21 @@ func (h *Handlers) GetWorstDailyValues(w http.ResponseWriter, r *http.Request) {
 	// Get all readings for today
 	readings := h.store.GetReadingsInRange(startOfDay, endOfDay)
 
-	if len(readings) == 0 {
-		h.sendErrorResponse(w, "No sensor data found for today", http.StatusNotFound)
-		return
-	}
+	var worstValues WorstDailyValues
 
-	// Calculate worst values
-	worstValues := calculateWorstValues(readings)
+	if len(readings) == 0 {
+		// Return default values instead of 404 error when no data exists
+		worstValues = WorstDailyValues{
+			Date:          now.Format("2006-01-02"),
+			WorstPH:       7.0,
+			WorstTDS:      400,
+			WorstTurbidity: 0.5,
+			TotalReadings: 0,
+		}
+	} else {
+		// Calculate worst values from actual readings
+		worstValues = calculateWorstValues(readings)
+	}
 
 	response := APIResponse{
 		Success: true,
