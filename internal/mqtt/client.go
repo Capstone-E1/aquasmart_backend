@@ -98,6 +98,17 @@ func (c *Client) SubscribeToSensorData() {
 func (c *Client) handleSensorData(client MQTT.Client, msg MQTT.Message) {
 	log.Printf("📥 Received sensor data from MQTT topic: %s", msg.Topic())
 
+	// Try parsing as dummy data format first (with actual values)
+	var dummyPayload struct {
+		DeviceID   string  `json:"device_id"`
+		FilterMode string  `json:"filter_mode"`
+		Timestamp  string  `json:"timestamp"`
+		Flow       float64 `json:"flow"`
+		Ph         float64 `json:"ph"`
+		Turbidity  float64 `json:"turbidity"`
+		TDS        float64 `json:"tds"`
+	}
+
 	// Parse JSON payload
 	var payload struct {
 		DeviceID         string  `json:"device_id"`
@@ -107,26 +118,47 @@ func (c *Client) handleSensorData(client MQTT.Client, msg MQTT.Message) {
 		TDSVoltage       float64 `json:"tds_v"`
 	}
 
-	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-		log.Printf("❌ Error parsing sensor data: %v", err)
-		log.Printf("   Raw payload: %s", string(msg.Payload()))
-		return
+	var ph, turbidity, tds float64
+	var filterMode models.FilterMode
+	var deviceID string
+	var flow float64
+	isDummyData := false
+
+	// Try parsing as dummy data format (with actual values, not voltages)
+	if err := json.Unmarshal(msg.Payload(), &dummyPayload); err == nil && dummyPayload.Ph > 0 {
+		// This is dummy data with actual values
+		ph = dummyPayload.Ph
+		turbidity = dummyPayload.Turbidity
+		tds = dummyPayload.TDS
+		flow = dummyPayload.Flow
+		deviceID = dummyPayload.DeviceID
+		filterMode = models.FilterMode(dummyPayload.FilterMode)
+		isDummyData = true
+		log.Printf("🤖 Detected DUMMY data from %s", deviceID)
+	} else {
+		// Parse as real sensor data (with voltages)
+		if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+			log.Printf("❌ Error parsing sensor data: %v", err)
+			log.Printf("   Raw payload: %s", string(msg.Payload()))
+			return
+		}
+
+		// Convert voltages to actual values
+		ph = convertPhVoltage(payload.PhVoltage)
+		turbidity = convertTurbidityVoltage(payload.TurbidityVoltage)
+		tds = convertTDSVoltage(payload.TDSVoltage)
+		flow = payload.Flow
+		deviceID = payload.DeviceID
+		filterMode = c.store.GetCurrentFilterMode()
+		log.Printf("📡 Detected REAL sensor data from %s", deviceID)
 	}
-
-	// Convert voltages to actual values (same logic as HTTP handler)
-	ph := convertPhVoltage(payload.PhVoltage)
-	turbidity := convertTurbidityVoltage(payload.TurbidityVoltage)
-	tds := convertTDSVoltage(payload.TDSVoltage)
-
-	// Get current filter mode
-	filterMode := c.store.GetCurrentFilterMode()
 
 	// Create sensor reading
 	sensorData := models.SensorReading{
-		DeviceID:   payload.DeviceID,
+		DeviceID:   deviceID,
 		Timestamp:  time.Now(),
 		FilterMode: filterMode,
-		Flow:       payload.Flow,
+		Flow:       flow,
 		Ph:         ph,
 		Turbidity:  turbidity,
 		TDS:        tds,
@@ -135,8 +167,12 @@ func (c *Client) handleSensorData(client MQTT.Client, msg MQTT.Message) {
 	// Store in database
 	c.store.AddSensorReading(sensorData)
 
-	log.Printf("✅ Stored sensor data from %s via MQTT: Flow=%.2f, pH=%.2f, Turbidity=%.2f, TDS=%.2f",
-		payload.DeviceID, payload.Flow, ph, turbidity, tds)
+	logPrefix := "✅"
+	if isDummyData {
+		logPrefix = "🤖✅"
+	}
+	log.Printf("%s Stored sensor data from %s via MQTT: Flow=%.2f, pH=%.2f, Turbidity=%.2f, TDS=%.2f",
+		logPrefix, deviceID, flow, ph, turbidity, tds)
 }
 
 // PublishFilterCommand publishes filter mode change command to ESP32
