@@ -1087,15 +1087,11 @@ func (h *Handlers) GetBestDailyValues(w http.ResponseWriter, r *http.Request) {
 	if len(readings) == 0 {
 		// Return default values instead of 404 error when no data exists
 		bestValues = BestDailyValues{
-			Date:            now.Format("2006-01-02"),
-			FilterMode:      "drinking_water",
-			BestPH:          7.0,
-			BestTDS:         400,
-			BestTurbidity:   0.5,
-			BestFlow:        2.5,
-			TotalReadings:   0,
-			OverallQuality:  "No Data",
-			Summary:         "No sensor data available for today.",
+			Date:          now.Format("2006-01-02"),
+			BestPH:        7.0,
+			BestTDS:       0,
+			BestTurbidity: 0,
+			TotalReadings: 0,
 		}
 	} else {
 		// Calculate best values from actual readings
