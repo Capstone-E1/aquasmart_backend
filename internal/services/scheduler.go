@@ -6,24 +6,27 @@ import (
 	"time"
 
 	"github.com/Capstone-E1/aquasmart_backend/internal/models"
+	"github.com/Capstone-E1/aquasmart_backend/internal/mqtt"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
 )
 
 // Scheduler manages automated filter mode scheduling
 type Scheduler struct {
-	store           store.DataStore
-	ticker          *time.Ticker
-	stopChan        chan bool
-	mu              sync.RWMutex
-	isRunning       bool
+	store            store.DataStore
+	ticker           *time.Ticker
+	stopChan         chan bool
+	mu               sync.RWMutex
+	isRunning        bool
 	currentExecution *models.ScheduleExecution
+	mqttClient       *mqtt.Client
 }
 
 // NewScheduler creates a new scheduler instance
-func NewScheduler(dataStore store.DataStore) *Scheduler {
+func NewScheduler(dataStore store.DataStore, mqttClient *mqtt.Client) *Scheduler {
 	return &Scheduler{
-		store:    dataStore,
-		stopChan: make(chan bool),
+		store:      dataStore,
+		stopChan:   make(chan bool),
+		mqttClient: mqttClient,
 	}
 }
 
@@ -141,8 +144,16 @@ func (s *Scheduler) executeSchedule(schedule *models.FilterSchedule) error {
 	s.currentExecution = execution
 	s.mu.Unlock()
 
-	// Change filter mode
+	// Change filter mode in the database
 	s.store.SetCurrentFilterMode(schedule.FilterMode)
+
+	// Publish filter command via MQTT
+	if s.mqttClient != nil {
+		if err := s.mqttClient.PublishFilterCommand(schedule.FilterMode); err != nil {
+			log.Printf("❌ Scheduler: Failed to publish MQTT filter command: %v", err)
+			// Do not return error, just log it, as the main action (DB update) succeeded
+		}
+	}
 
 	log.Printf("✅ Scheduler: Successfully set filter mode to '%s' for schedule '%s'", schedule.FilterMode, schedule.Name)
 
