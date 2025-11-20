@@ -377,6 +377,12 @@ func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// NEW: Check if a schedule is currently active
+	if h.scheduler != nil && h.scheduler.GetCurrentExecution() != nil {
+		h.sendErrorResponse(w, "Cannot change filter mode: A schedule is currently active", http.StatusConflict)
+		return
+	}
+
 	// Check if filter mode change is allowed
 	canChange, reason := h.store.CanChangeFilterMode()
 	if !canChange && !request.Force {
@@ -497,6 +503,13 @@ func (h *Handlers) GetFilterStatus(w http.ResponseWriter, r *http.Request) {
 	responseData := map[string]interface{}{
 		"current_mode":          currentMode,
 		"filter_mode_tracking":  tracking,
+	}
+
+	// Add current active schedule info if any
+	if h.scheduler != nil {
+		if activeSchedule := h.scheduler.GetCurrentExecution(); activeSchedule != nil {
+			responseData["active_schedule"] = activeSchedule
+		}
 	}
 	
 	response := APIResponse{
