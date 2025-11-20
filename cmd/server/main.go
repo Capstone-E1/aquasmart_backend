@@ -95,7 +95,7 @@ func main() {
 	}
 
 	// Initialize and start scheduler
-	scheduler := services.NewScheduler(dataStore)
+	scheduler := services.NewScheduler(dataStore, mqttClient)
 	scheduler.Start()
 	log.Println("🕐 Started automated filter mode scheduler")
 
