@@ -22,8 +22,8 @@ RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o main github.com/C
 # Runtime stage
 FROM alpine:latest
 
-# Install runtime dependencies
-RUN apk --no-cache add ca-certificates wget
+# Install runtime dependencies and timezone data
+RUN apk --no-cache add ca-certificates wget tzdata
 
 # Set working directory
 WORKDIR /root/
