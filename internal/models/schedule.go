@@ -15,6 +15,7 @@ type FilterSchedule struct {
 	DurationMinutes int        `json:"duration_minutes"`
 	DaysOfWeek      []string   `json:"days_of_week"`    // e.g., ["monday", "tuesday"]
 	IsActive        bool       `json:"is_active"`
+	Timezone        string     `json:"timezone"`        // IANA Time Zone name
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
@@ -45,6 +46,7 @@ type CreateScheduleRequest struct {
 	DurationMinutes int        `json:"duration_minutes" validate:"required,min=1,max=1440"`
 	DaysOfWeek      []string   `json:"days_of_week" validate:"required,min=1"`
 	IsActive        bool       `json:"is_active"`
+	Timezone        string     `json:"timezone" validate:"required"`        // IANA Time Zone name
 }
 
 // UpdateScheduleRequest represents the request body for updating a schedule
@@ -55,6 +57,7 @@ type UpdateScheduleRequest struct {
 	DurationMinutes *int        `json:"duration_minutes,omitempty"`
 	DaysOfWeek      []string    `json:"days_of_week,omitempty"`
 	IsActive        *bool       `json:"is_active,omitempty"`
+	Timezone        *string     `json:"timezone,omitempty"`      // IANA Time Zone name
 }
 
 // ValidDaysOfWeek contains all valid day names
@@ -105,7 +108,21 @@ func (r *CreateScheduleRequest) Validate() error {
 		}
 	}
 
+	// Validate timezone
+	if !isValidTimezone(r.Timezone) {
+		return fmt.Errorf("invalid timezone: %s", r.Timezone)
+	}
+
 	return nil
+}
+
+// isValidTimezone checks if a string is a valid IANA Time Zone database name
+func isValidTimezone(tz string) bool {
+	if tz == "" {
+		return false
+	}
+	_, err := time.LoadLocation(tz)
+	return err == nil
 }
 
 // Validate validates the update schedule request
@@ -152,6 +169,11 @@ func (r *UpdateScheduleRequest) Validate() error {
 		}
 	}
 
+	// Validate timezone if provided
+	if r.Timezone != nil && !isValidTimezone(*r.Timezone) {
+		return fmt.Errorf("invalid timezone: %s", *r.Timezone)
+	}
+
 	return nil
 }
 
@@ -192,7 +214,11 @@ func NormalizeTimeFormat(timeStr string) string {
 
 // IsScheduledForToday checks if the schedule should run today
 func (s *FilterSchedule) IsScheduledForToday() bool {
-	today := strings.ToLower(time.Now().Weekday().String())
+	loc, err := time.LoadLocation(s.Timezone)
+	if err != nil {
+		return false
+	}
+	today := strings.ToLower(time.Now().In(loc).Weekday().String())
 	for _, day := range s.DaysOfWeek {
 		if strings.ToLower(day) == today {
 			return true
@@ -220,12 +246,28 @@ func (s *FilterSchedule) ShouldExecuteNow() bool {
 		return false
 	}
 
-	if !s.IsScheduledForToday() {
+	// Load the schedule's timezone
+	loc, err := time.LoadLocation(s.Timezone)
+	if err != nil {
+		// If timezone is invalid, cannot execute
 		return false
 	}
 
-	now := time.Now()
-	currentTime := now.Format("15:04:05")
+	// Get the current time in the schedule's timezone
+	nowInLoc := time.Now().In(loc)
+	currentWeekday := strings.ToLower(nowInLoc.Weekday().String())
+
+	// Check if scheduled for today
+	isScheduledToday := false
+	for _, day := range s.DaysOfWeek {
+		if strings.ToLower(day) == currentWeekday {
+			isScheduledToday = true
+			break
+		}
+	}
+	if !isScheduledToday {
+		return false
+	}
 
 	// Parse schedule start time
 	scheduleTime, err := time.Parse("15:04:05", s.StartTime)
@@ -233,57 +275,73 @@ func (s *FilterSchedule) ShouldExecuteNow() bool {
 		return false
 	}
 
-	// Parse current time
-	nowTime, err := time.Parse("15:04:05", currentTime)
-	if err != nil {
-		return false
-	}
+	// Get the current time of day in the location
+	nowTimeOfDay := time.Date(0, 1, 1, nowInLoc.Hour(), nowInLoc.Minute(), nowInLoc.Second(), 0, time.UTC)
+	
+	// Get the schedule start time of day
+	scheduleTimeOfDay := time.Date(0, 1, 1, scheduleTime.Hour(), scheduleTime.Minute(), scheduleTime.Second(), 0, time.UTC)
 
-	// Calculate end time
-	endTime := scheduleTime.Add(time.Duration(s.DurationMinutes) * time.Minute)
-
-	// Check if current time is within schedule window
-	return nowTime.After(scheduleTime) && nowTime.Before(endTime) || nowTime.Equal(scheduleTime)
+	// Check if the current time is within one minute of the schedule start time
+	// This accounts for the scheduler running every minute
+	diff := nowTimeOfDay.Sub(scheduleTimeOfDay).Minutes()
+	return diff >= 0 && diff < 1
 }
 
-// CalculateNextExecution calculates when this schedule will next execute
+// CalculateNextExecution calculates when this schedule will next execute in UTC
 func (s *FilterSchedule) CalculateNextExecution() *time.Time {
 	if !s.IsActive || len(s.DaysOfWeek) == 0 {
 		return nil
 	}
 
-	now := time.Now()
-	currentWeekday := strings.ToLower(now.Weekday().String())
+	// Load the schedule's timezone
+	loc, err := time.LoadLocation(s.Timezone)
+	if err != nil {
+		// If timezone is invalid, cannot calculate next execution
+		return nil
+	}
 
-	// Parse schedule start time
-	scheduleTime, err := time.Parse("15:04:05", s.StartTime)
+	// Get the current time in the schedule's timezone
+	nowInLoc := time.Now().In(loc)
+
+	// Parse schedule start time (without date)
+	startTime, err := time.Parse("15:04:05", s.StartTime)
 	if err != nil {
 		return nil
 	}
 
-	// Check if scheduled for today and time hasn't passed
-	for _, day := range s.DaysOfWeek {
-		if strings.ToLower(day) == currentWeekday {
-			// Combine today's date with schedule time
-			todaySchedule := time.Date(now.Year(), now.Month(), now.Day(),
-				scheduleTime.Hour(), scheduleTime.Minute(), scheduleTime.Second(), 0, now.Location())
+	// Function to create a schedule time for a given day
+	createScheduleTime := func(t time.Time) time.Time {
+		return time.Date(t.Year(), t.Month(), t.Day(),
+			startTime.Hour(), startTime.Minute(), startTime.Second(), 0, loc)
+	}
 
-			if todaySchedule.After(now) {
-				return &todaySchedule
+	// Check for today
+	todaySchedule := createScheduleTime(nowInLoc)
+	if todaySchedule.After(nowInLoc) {
+		isScheduledToday := false
+		currentWeekday := strings.ToLower(nowInLoc.Weekday().String())
+		for _, day := range s.DaysOfWeek {
+			if strings.ToLower(day) == currentWeekday {
+				isScheduledToday = true
+				break
 			}
+		}
+		if isScheduledToday {
+			utcExecution := todaySchedule.UTC()
+			return &utcExecution
 		}
 	}
 
-	// Find next scheduled day
+	// Find the next scheduled day
 	for i := 1; i <= 7; i++ {
-		nextDay := now.AddDate(0, 0, i)
+		nextDay := nowInLoc.AddDate(0, 0, i)
 		nextWeekday := strings.ToLower(nextDay.Weekday().String())
 
 		for _, day := range s.DaysOfWeek {
 			if strings.ToLower(day) == nextWeekday {
-				nextSchedule := time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(),
-					scheduleTime.Hour(), scheduleTime.Minute(), scheduleTime.Second(), 0, now.Location())
-				return &nextSchedule
+				nextSchedule := createScheduleTime(nextDay)
+				utcExecution := nextSchedule.UTC()
+				return &utcExecution
 			}
 		}
 	}

@@ -37,16 +37,26 @@ func NewClient(brokerURL, clientID, username, password string, dataStore store.D
 	}
 
 	// Configure TLS for secure connections (HiveMQ Cloud uses TLS on port 8883)
-	// This will automatically use TLS if the broker URL uses tls:// or ssl:// scheme
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: false, // Set to true only for testing with self-signed certs
 		MinVersion:         tls.VersionTLS12,
 	}
 	opts.SetTLSConfig(tlsConfig)
 
+	// Create the client wrapper instance so we can use its methods in the handlers
+	mqttClient := &Client{
+		store:              dataStore,
+		topicSensorData:    topics["sensor_data"],
+		topicFilterCommand: topics["filter_command"],
+	}
+
 	// Set callbacks
 	opts.SetDefaultPublishHandler(messageHandler)
-	opts.SetOnConnectHandler(onConnect)
+	// SetOnConnectHandler is the key change: it ensures re-subscription on reconnect
+	opts.SetOnConnectHandler(func(client MQTT.Client) {
+		log.Println("✅ MQTT onConnect event: Subscribing to topics...")
+		mqttClient.SubscribeToSensorData()
+	})
 	opts.SetConnectionLostHandler(onConnectionLost)
 
 	// Connection settings
@@ -54,12 +64,14 @@ func NewClient(brokerURL, clientID, username, password string, dataStore store.D
 	opts.SetConnectRetry(true)
 	opts.SetKeepAlive(30 * time.Second)
 	opts.SetPingTimeout(10 * time.Second)
-	opts.SetConnectTimeout(30 * time.Second) // Add connection timeout
+	opts.SetConnectTimeout(30 * time.Second)
 	opts.SetWriteTimeout(10 * time.Second)
 
 	log.Printf("🔌 Connecting to MQTT broker: %s", brokerURL)
 
 	client := MQTT.NewClient(opts)
+	mqttClient.client = client // Attach the actual paho client to our wrapper
+
 	token := client.Connect()
 	token.Wait()
 
@@ -67,17 +79,8 @@ func NewClient(brokerURL, clientID, username, password string, dataStore store.D
 		return nil, fmt.Errorf("failed to connect to MQTT broker: %w", token.Error())
 	}
 
-	mqttClient := &Client{
-		client:             client,
-		store:              dataStore,
-		topicSensorData:    topics["sensor_data"],
-		topicFilterCommand: topics["filter_command"],
-	}
-
-	// Subscribe to sensor data topic
-	mqttClient.SubscribeToSensorData()
-
-	log.Printf("✅ MQTT client connected to broker: %s", brokerURL)
+	// The initial subscription is now reliably handled by the OnConnectHandler.
+	log.Printf("✅ MQTT client fully connected to broker: %s", brokerURL)
 	return mqttClient, nil
 }
 
@@ -247,10 +250,6 @@ func convertTDSVoltage(voltage float64) float64 {
 // MQTT event handlers
 func messageHandler(client MQTT.Client, msg MQTT.Message) {
 	log.Printf("📨 Received message on topic: %s", msg.Topic())
-}
-
-func onConnect(client MQTT.Client) {
-	log.Println("✅ MQTT client connected to broker")
 }
 
 func onConnectionLost(client MQTT.Client, err error) {

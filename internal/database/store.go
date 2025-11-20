@@ -822,8 +822,8 @@ func (s *DatabaseStore) GetLEDCommand() string {
 // CreateSchedule creates a new filter schedule
 func (s *DatabaseStore) CreateSchedule(schedule *models.FilterSchedule) error {
 	query := `
-		INSERT INTO filter_schedules (name, filter_mode, start_time, duration_minutes, days_of_week, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO filter_schedules (name, filter_mode, start_time, duration_minutes, days_of_week, is_active, timezone)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at`
 
 	err := s.db.QueryRow(query,
@@ -833,6 +833,7 @@ func (s *DatabaseStore) CreateSchedule(schedule *models.FilterSchedule) error {
 		schedule.DurationMinutes,
 		pq.Array(schedule.DaysOfWeek),
 		schedule.IsActive,
+		schedule.Timezone,
 	).Scan(&schedule.ID, &schedule.CreatedAt, &schedule.UpdatedAt)
 
 	if err != nil {
@@ -847,7 +848,7 @@ func (s *DatabaseStore) CreateSchedule(schedule *models.FilterSchedule) error {
 // GetSchedule retrieves a schedule by ID
 func (s *DatabaseStore) GetSchedule(id int) (*models.FilterSchedule, error) {
 	query := `
-		SELECT id, name, filter_mode, start_time, duration_minutes, days_of_week, is_active, created_at, updated_at
+		SELECT id, name, filter_mode, start_time, duration_minutes, days_of_week, is_active, timezone, created_at, updated_at
 		FROM filter_schedules
 		WHERE id = $1`
 
@@ -861,6 +862,7 @@ func (s *DatabaseStore) GetSchedule(id int) (*models.FilterSchedule, error) {
 		&schedule.DurationMinutes,
 		pq.Array(&schedule.DaysOfWeek),
 		&schedule.IsActive,
+		&schedule.Timezone,
 		&schedule.CreatedAt,
 		&schedule.UpdatedAt,
 	)
@@ -882,7 +884,7 @@ func (s *DatabaseStore) GetSchedule(id int) (*models.FilterSchedule, error) {
 // GetAllSchedules retrieves all schedules, optionally filtered by active status
 func (s *DatabaseStore) GetAllSchedules(activeOnly bool) ([]models.FilterSchedule, error) {
 	query := `
-		SELECT id, name, filter_mode, start_time, duration_minutes, days_of_week, is_active, created_at, updated_at
+		SELECT id, name, filter_mode, start_time, duration_minutes, days_of_week, is_active, timezone, created_at, updated_at
 		FROM filter_schedules`
 
 	if activeOnly {
@@ -910,6 +912,7 @@ func (s *DatabaseStore) GetAllSchedules(activeOnly bool) ([]models.FilterSchedul
 			&schedule.DurationMinutes,
 			pq.Array(&schedule.DaysOfWeek),
 			&schedule.IsActive,
+			&schedule.Timezone,
 			&schedule.CreatedAt,
 			&schedule.UpdatedAt,
 		)
@@ -932,8 +935,8 @@ func (s *DatabaseStore) UpdateSchedule(schedule *models.FilterSchedule) error {
 	query := `
 		UPDATE filter_schedules
 		SET name = $1, filter_mode = $2, start_time = $3, duration_minutes = $4, 
-		    days_of_week = $5, is_active = $6, updated_at = NOW()
-		WHERE id = $7`
+		    days_of_week = $5, is_active = $6, timezone = $7, updated_at = NOW()
+		WHERE id = $8`
 
 	result, err := s.db.Exec(query,
 		schedule.Name,
@@ -942,6 +945,7 @@ func (s *DatabaseStore) UpdateSchedule(schedule *models.FilterSchedule) error {
 		schedule.DurationMinutes,
 		pq.Array(schedule.DaysOfWeek),
 		schedule.IsActive,
+		schedule.Timezone,
 		schedule.ID,
 	)
 

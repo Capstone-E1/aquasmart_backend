@@ -6,24 +6,27 @@ import (
 	"time"
 
 	"github.com/Capstone-E1/aquasmart_backend/internal/models"
+	"github.com/Capstone-E1/aquasmart_backend/internal/mqtt"
 	"github.com/Capstone-E1/aquasmart_backend/internal/store"
 )
 
 // Scheduler manages automated filter mode scheduling
 type Scheduler struct {
-	store           store.DataStore
-	ticker          *time.Ticker
-	stopChan        chan bool
-	mu              sync.RWMutex
-	isRunning       bool
+	store            store.DataStore
+	ticker           *time.Ticker
+	stopChan         chan bool
+	mu               sync.RWMutex
+	isRunning        bool
 	currentExecution *models.ScheduleExecution
+	mqttClient       *mqtt.Client
 }
 
 // NewScheduler creates a new scheduler instance
-func NewScheduler(dataStore store.DataStore) *Scheduler {
+func NewScheduler(dataStore store.DataStore, mqttClient *mqtt.Client) *Scheduler {
 	return &Scheduler{
-		store:    dataStore,
-		stopChan: make(chan bool),
+		store:      dataStore,
+		stopChan:   make(chan bool),
+		mqttClient: mqttClient,
 	}
 }
 
@@ -141,8 +144,16 @@ func (s *Scheduler) executeSchedule(schedule *models.FilterSchedule) error {
 	s.currentExecution = execution
 	s.mu.Unlock()
 
-	// Change filter mode
+	// Change filter mode in the database
 	s.store.SetCurrentFilterMode(schedule.FilterMode)
+
+	// Publish filter command via MQTT
+	if s.mqttClient != nil {
+		if err := s.mqttClient.PublishFilterCommand(schedule.FilterMode); err != nil {
+			log.Printf("❌ Scheduler: Failed to publish MQTT filter command: %v", err)
+			// Do not return error, just log it, as the main action (DB update) succeeded
+		}
+	}
 
 	log.Printf("✅ Scheduler: Successfully set filter mode to '%s' for schedule '%s'", schedule.FilterMode, schedule.Name)
 
@@ -222,6 +233,30 @@ func (s *Scheduler) HandleManualOverride(reason string) {
 	}
 
 	s.currentExecution = nil
+}
+
+// CancelExecution cancels a currently running execution if it matches the scheduleID
+func (s *Scheduler) CancelExecution(scheduleID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.currentExecution == nil || s.currentExecution.ScheduleID != scheduleID {
+		return // No running execution for this schedule, or it's a different one
+	}
+
+	// Update the status of the execution record to "cancelled"
+	s.currentExecution.Status = "cancelled"
+	s.currentExecution.CompletedAt = timePtr(time.Now())
+
+	if err := s.store.UpdateScheduleExecution(s.currentExecution); err != nil {
+		log.Printf("❌ Scheduler: Failed to mark execution as cancelled in DB: %v", err)
+	} else {
+		log.Printf("✅ Scheduler: Marked execution for schedule ID %d as cancelled", scheduleID)
+	}
+
+	// Clear the in-memory currentExecution state
+	s.currentExecution = nil
+	log.Printf("✅ Scheduler: Cleared in-memory currentExecution for schedule ID %d", scheduleID)
 }
 
 // GetCurrentExecution returns the currently running schedule execution

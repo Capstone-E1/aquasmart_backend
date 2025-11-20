@@ -1,9 +1,11 @@
 package http
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -375,6 +377,12 @@ func (h *Handlers) SetFilterMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// NEW: Check if a schedule is currently active
+	if h.scheduler != nil && h.scheduler.GetCurrentExecution() != nil {
+		h.sendErrorResponse(w, "Cannot change filter mode: A schedule is currently active", http.StatusConflict)
+		return
+	}
+
 	// Check if filter mode change is allowed
 	canChange, reason := h.store.CanChangeFilterMode()
 	if !canChange && !request.Force {
@@ -495,6 +503,13 @@ func (h *Handlers) GetFilterStatus(w http.ResponseWriter, r *http.Request) {
 	responseData := map[string]interface{}{
 		"current_mode":          currentMode,
 		"filter_mode_tracking":  tracking,
+	}
+
+	// Add current active schedule info if any
+	if h.scheduler != nil {
+		if activeSchedule := h.scheduler.GetCurrentExecution(); activeSchedule != nil {
+			responseData["active_schedule"] = activeSchedule
+		}
 	}
 	
 	response := APIResponse{
@@ -1274,6 +1289,17 @@ func calculateWorstValues(readings []models.SensorReading) WorstDailyValues {
 func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 	var request models.CreateScheduleRequest
 
+	// Log the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		h.sendErrorResponse(w, "Failed to read request body", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("Received CreateSchedule request with body: %s", string(body))
+
+	// Restore the body so it can be read again by json.Decoder
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
+
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		h.sendErrorResponse(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -1281,6 +1307,7 @@ func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 
 	// Validate request
 	if err := request.Validate(); err != nil {
+		log.Printf("Validation error for CreateSchedule: %v", err)
 		h.sendErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1297,6 +1324,7 @@ func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 		DurationMinutes: request.DurationMinutes,
 		DaysOfWeek:      normalizedDays,
 		IsActive:        request.IsActive,
+		Timezone:        request.Timezone,
 	}
 
 	// Save to database
@@ -1434,6 +1462,9 @@ func (h *Handlers) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	if request.IsActive != nil {
 		existing.IsActive = *request.IsActive
 	}
+	if request.Timezone != nil {
+		existing.Timezone = *request.Timezone
+	}
 
 	// Save updated schedule
 	if err := h.store.UpdateSchedule(existing); err != nil {
@@ -1458,6 +1489,11 @@ func (h *Handlers) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.sendErrorResponse(w, "Invalid schedule ID", http.StatusBadRequest)
 		return
+	}
+
+	// First, check if this schedule is currently being executed and cancel it
+	if h.scheduler != nil {
+		h.scheduler.CancelExecution(id)
 	}
 
 	if err := h.store.DeleteSchedule(id); err != nil {
