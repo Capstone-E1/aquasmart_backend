@@ -1,0 +1,1 @@
+ALTER TABLE filter_schedules ADD COLUMN timezone VARCHAR(255) NOT NULL DEFAULT 'UTC';

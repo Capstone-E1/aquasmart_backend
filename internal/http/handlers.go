@@ -1297,6 +1297,7 @@ func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 		DurationMinutes: request.DurationMinutes,
 		DaysOfWeek:      normalizedDays,
 		IsActive:        request.IsActive,
+		Timezone:        request.Timezone,
 	}
 
 	// Save to database
@@ -1433,6 +1434,9 @@ func (h *Handlers) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.IsActive != nil {
 		existing.IsActive = *request.IsActive
+	}
+	if request.Timezone != nil {
+		existing.Timezone = *request.Timezone
 	}
 
 	// Save updated schedule
