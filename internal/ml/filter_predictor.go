@@ -516,50 +516,30 @@ func (fp *FilterPredictor) generateRecommendations(
 	return recommendations
 }
 
-// Enhanced prediction methods combining multiple factors
+// Enhanced prediction methods - Simplified to use only efficiency
 
-// predictRemainingDaysEnhanced uses multiple factors for better prediction
+// predictRemainingDaysEnhanced uses ONLY efficiency-based prediction
 // Uses statistical methods with linear regression for degradation rate
+// Flow and age-based methods are disabled due to unreliable flow sensor
 func (fp *FilterPredictor) predictRemainingDaysEnhanced(
 	efficiencies []float64,
 	currentEfficiency float64,
 	trend string,
 	readings []models.SensorReading,
 ) int {
-	// Get base prediction from efficiency degradation using linear regression
-	efficiencyBasedDays := fp.predictRemainingDays(efficiencies, currentEfficiency, trend)
-
-	// Calculate flow-based prediction
-	flowBasedDays := fp.predictByFlowVolume(readings)
-
-	// Calculate age-based prediction
-	ageBasedDays := fp.predictByAge(readings)
-
-	// Combine predictions with weighted average
-	// Efficiency: 50%, Flow: 30%, Age: 20%
-	weightedDays := (float64(efficiencyBasedDays) * 0.5) +
-		(float64(flowBasedDays) * 0.3) +
-		(float64(ageBasedDays) * 0.2)
-
-	finalDays := int(weightedDays)
-
-	// Apply trend adjustment
-	switch trend {
-	case "degrading":
-		finalDays = int(float64(finalDays) * 0.85) // Reduce by 15% if degrading
-	case "improving":
-		finalDays = int(float64(finalDays) * 1.1) // Increase by 10% if improving
-	}
+	// Use ONLY efficiency-based prediction with least squares regression
+	// This is the most accurate method as it directly measures filter performance
+	daysRemaining := fp.predictRemainingDays(efficiencies, currentEfficiency, trend)
 
 	// Clamp between 0 and max filter life
-	if finalDays < 0 {
-		finalDays = 0
+	if daysRemaining < 0 {
+		daysRemaining = 0
 	}
-	if finalDays > fp.maxFilterLifeDays {
-		finalDays = fp.maxFilterLifeDays
+	if daysRemaining > fp.maxFilterLifeDays {
+		daysRemaining = fp.maxFilterLifeDays
 	}
 
-	return finalDays
+	return daysRemaining
 }
 
 
