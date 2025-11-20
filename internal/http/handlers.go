@@ -1,9 +1,11 @@
 package http
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -1274,6 +1276,17 @@ func calculateWorstValues(readings []models.SensorReading) WorstDailyValues {
 func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 	var request models.CreateScheduleRequest
 
+	// Log the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		h.sendErrorResponse(w, "Failed to read request body", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("Received CreateSchedule request with body: %s", string(body))
+
+	// Restore the body so it can be read again by json.Decoder
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
+
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		h.sendErrorResponse(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -1281,6 +1294,7 @@ func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 
 	// Validate request
 	if err := request.Validate(); err != nil {
+		log.Printf("Validation error for CreateSchedule: %v", err)
 		h.sendErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
