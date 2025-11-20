@@ -69,6 +69,9 @@ func SetupRoutes(dataStore store.DataStore, wsHub *ws.Hub, scheduler *services.S
 			// Add sensor data manually (for testing)
 			r.Post("/data", handlers.AddSensorData)
 
+			// Delete all sensor data
+			r.Delete("/all", handlers.DeleteAllSensorData)
+
 			// Best daily values for today
 			r.Get("/best-daily", handlers.GetBestDailyValues)
 

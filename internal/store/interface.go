@@ -22,6 +22,7 @@ type DataStore interface {
 	GetReadingsByDevice(string) []models.SensorReading
 	GetReadingsInRange(time.Time, time.Time) []models.SensorReading
 	GetReadingCount() int
+	DeleteAllSensorReadings() error
 	GetActiveDevices() []string
 	GetCurrentFilterMode() models.FilterMode
 	SetCurrentFilterMode(models.FilterMode)

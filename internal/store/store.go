@@ -357,6 +357,19 @@ func (s *Store) GetReadingCount() int {
 	return len(s.sensorReadings)
 }
 
+// DeleteAllSensorReadings removes all sensor readings from the store
+func (s *Store) DeleteAllSensorReadings() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.sensorReadings = make([]models.SensorReading, 0, s.maxReadings)
+	s.latestReading = nil
+	s.latestByMode = make(map[models.FilterMode]*models.SensorReading)
+	s.latestByDevice = make(map[string]*models.SensorReading)
+
+	return nil
+}
+
 // ClearReadings removes all stored readings (useful for testing)
 func (s *Store) ClearReadings() {
 	s.mu.Lock()

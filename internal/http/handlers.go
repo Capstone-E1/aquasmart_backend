@@ -262,6 +262,26 @@ func (h *Handlers) GetSystemStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// DeleteAllSensorData deletes all sensor readings from the database
+func (h *Handlers) DeleteAllSensorData(w http.ResponseWriter, r *http.Request) {
+	// Call the store method to delete all sensor readings
+	err := h.store.DeleteAllSensorReadings()
+	if err != nil {
+		h.sendErrorResponse(w, fmt.Sprintf("Failed to delete sensor data: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	response := APIResponse{
+		Success: true,
+		Data: map[string]string{
+			"message": "All sensor data has been deleted successfully",
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 // sendErrorResponse sends a standardized error response
 func (h *Handlers) sendErrorResponse(w http.ResponseWriter, message string, statusCode int) {
 	response := APIResponse{
@@ -1082,13 +1102,21 @@ func (h *Handlers) GetBestDailyValues(w http.ResponseWriter, r *http.Request) {
 	// Get all readings for today
 	readings := h.store.GetReadingsInRange(startOfDay, endOfDay)
 
-	if len(readings) == 0 {
-		h.sendErrorResponse(w, "No sensor data found for today", http.StatusNotFound)
-		return
-	}
+	var bestValues BestDailyValues
 
-	// Calculate best values
-	bestValues := calculateBestValues(readings)
+	if len(readings) == 0 {
+		// Return default values instead of 404 error when no data exists
+		bestValues = BestDailyValues{
+			Date:          now.Format("2006-01-02"),
+			BestPH:        7.0,
+			BestTDS:       0,
+			BestTurbidity: 0,
+			TotalReadings: 0,
+		}
+	} else {
+		// Calculate best values from actual readings
+		bestValues = calculateBestValues(readings)
+	}
 
 	response := APIResponse{
 		Success: true,
@@ -1166,13 +1194,21 @@ func (h *Handlers) GetWorstDailyValues(w http.ResponseWriter, r *http.Request) {
 	// Get all readings for today
 	readings := h.store.GetReadingsInRange(startOfDay, endOfDay)
 
-	if len(readings) == 0 {
-		h.sendErrorResponse(w, "No sensor data found for today", http.StatusNotFound)
-		return
-	}
+	var worstValues WorstDailyValues
 
-	// Calculate worst values
-	worstValues := calculateWorstValues(readings)
+	if len(readings) == 0 {
+		// Return default values instead of 404 error when no data exists
+		worstValues = WorstDailyValues{
+			Date:          now.Format("2006-01-02"),
+			WorstPH:       7.0,
+			WorstTDS:      400,
+			WorstTurbidity: 0.5,
+			TotalReadings: 0,
+		}
+	} else {
+		// Calculate worst values from actual readings
+		worstValues = calculateWorstValues(readings)
+	}
 
 	response := APIResponse{
 		Success: true,

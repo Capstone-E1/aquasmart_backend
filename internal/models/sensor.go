@@ -11,10 +11,10 @@ type SensorReading struct {
 	DeviceID   string     `json:"device_id"`
 	Timestamp  time.Time  `json:"timestamp"`
 	FilterMode FilterMode `json:"filter_mode"`
-	Flow       float64    `json:"flow"`      
-	Ph         float64    `json:"ph"`        
-	Turbidity  float64    `json:"turbidity"` 
-	TDS        float64    `json:"tds"`       
+	Flow       float64    `json:"flow"`
+	Ph         float64    `json:"ph"`
+	Turbidity  float64    `json:"turbidity"`
+	TDS        float64    `json:"tds"`
 }
 
 func ConvertVoltageToTurbidity(voltage float64) float64 {
@@ -24,7 +24,7 @@ func ConvertVoltageToTurbidity(voltage float64) float64 {
 	if voltage > 3.0 {
 		voltage = 3.0
 	}
-	return (voltage / 3.0) * 1000.0
+	return (-5 * 1000 / 3.3 * voltage) + 1005.0
 }
 
 func ConvertVoltageToTDS(voltage float64) float64 {
@@ -216,13 +216,13 @@ type FilterCommand struct {
 
 // FilterStatus represents the current status of the water filter
 type FilterStatus struct {
-	CurrentMode        FilterMode        `json:"current_mode"`
-	IsActive           bool              `json:"is_active"`
-	LastChanged        time.Time         `json:"last_changed"`
-	Timestamp          time.Time         `json:"timestamp"`
-	FiltrationState    FiltrationState   `json:"filtration_state"`
-	ProcessStartedAt   *time.Time        `json:"process_started_at,omitempty"`
-	EstimatedCompletion *time.Time       `json:"estimated_completion,omitempty"`
+	CurrentMode         FilterMode      `json:"current_mode"`
+	IsActive            bool            `json:"is_active"`
+	LastChanged         time.Time       `json:"last_changed"`
+	Timestamp           time.Time       `json:"timestamp"`
+	FiltrationState     FiltrationState `json:"filtration_state"`
+	ProcessStartedAt    *time.Time      `json:"process_started_at,omitempty"`
+	EstimatedCompletion *time.Time      `json:"estimated_completion,omitempty"`
 }
 
 // FiltrationState represents the current state of the filtration process
@@ -237,23 +237,23 @@ const (
 
 // FiltrationProcess represents the current filtration process details
 type FiltrationProcess struct {
-	State              FiltrationState   `json:"state"`
-	CurrentMode        FilterMode        `json:"current_mode"`
-	StartedAt          time.Time         `json:"started_at"`
-	LastUpdated        time.Time         `json:"last_updated"`
+	State       FiltrationState `json:"state"`
+	CurrentMode FilterMode      `json:"current_mode"`
+	StartedAt   time.Time       `json:"started_at"`
+	LastUpdated time.Time       `json:"last_updated"`
 
 	// Flow-based tracking (PRIMARY)
-	TargetVolume       float64           `json:"target_volume"`        // Total liters to filter
-	ProcessedVolume    float64           `json:"processed_volume"`     // Liters already processed
-	CurrentFlowRate    float64           `json:"current_flow_rate"`    // Current L/min from sensor
+	TargetVolume    float64 `json:"target_volume"`     // Total liters to filter
+	ProcessedVolume float64 `json:"processed_volume"`  // Liters already processed
+	CurrentFlowRate float64 `json:"current_flow_rate"` // Current L/min from sensor
 
 	// Time-based estimation (SECONDARY)
-	EstimatedDuration  time.Duration     `json:"estimated_duration"`
-	EstimatedCompletion time.Time        `json:"estimated_completion"`
+	EstimatedDuration   time.Duration `json:"estimated_duration"`
+	EstimatedCompletion time.Time     `json:"estimated_completion"`
 
 	// Progress calculation
-	Progress           float64           `json:"progress"`              // 0-100%
-	CanInterrupt       bool              `json:"can_interrupt"`
+	Progress     float64 `json:"progress"` // 0-100%
+	CanInterrupt bool    `json:"can_interrupt"`
 }
 
 // CommandResponse represents a response from the STM32 device
