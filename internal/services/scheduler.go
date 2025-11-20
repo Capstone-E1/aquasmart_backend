@@ -235,6 +235,30 @@ func (s *Scheduler) HandleManualOverride(reason string) {
 	s.currentExecution = nil
 }
 
+// CancelExecution cancels a currently running execution if it matches the scheduleID
+func (s *Scheduler) CancelExecution(scheduleID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.currentExecution == nil || s.currentExecution.ScheduleID != scheduleID {
+		return // No running execution for this schedule, or it's a different one
+	}
+
+	// Update the status of the execution record to "cancelled"
+	s.currentExecution.Status = "cancelled"
+	s.currentExecution.CompletedAt = timePtr(time.Now())
+
+	if err := s.store.UpdateScheduleExecution(s.currentExecution); err != nil {
+		log.Printf("❌ Scheduler: Failed to mark execution as cancelled in DB: %v", err)
+	} else {
+		log.Printf("✅ Scheduler: Marked execution for schedule ID %d as cancelled", scheduleID)
+	}
+
+	// Clear the in-memory currentExecution state
+	s.currentExecution = nil
+	log.Printf("✅ Scheduler: Cleared in-memory currentExecution for schedule ID %d", scheduleID)
+}
+
 // GetCurrentExecution returns the currently running schedule execution
 func (s *Scheduler) GetCurrentExecution() *models.ScheduleExecution {
 	s.mu.RLock()

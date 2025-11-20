@@ -1491,6 +1491,11 @@ func (h *Handlers) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// First, check if this schedule is currently being executed and cancel it
+	if h.scheduler != nil {
+		h.scheduler.CancelExecution(id)
+	}
+
 	if err := h.store.DeleteSchedule(id); err != nil {
 		h.sendErrorResponse(w, err.Error(), http.StatusInternalServerError)
 		return
