@@ -51,7 +51,7 @@ func Load() *Config {
 			ReadTimeout:  getDurationEnv("SERVER_READ_TIMEOUT", 15*time.Second),
 			WriteTimeout: getDurationEnv("SERVER_WRITE_TIMEOUT", 15*time.Second),
 		},
-		MQTT: MQTTConfig{
+		MQTT: MQTTConfig{ 
 			BrokerURL:          getMQTTBrokerURL(),
 			ClientID:           getEnv("MQTT_CLIENT_ID", "aquasmart_backend"),
 			Username:           getEnv("MQTT_USERNAME", ""),
