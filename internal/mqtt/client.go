@@ -208,7 +208,7 @@ func (c *Client) Disconnect() {
 func convertPhVoltage(voltage float64) float64 {
 	// pH sensor: Voltage 0-3.3V maps to pH 0-14
 	// Calibrated formula
-	ph := voltage * (14.0 / 3.3)
+	ph := ((voltage * (14.0 / 3.3)) - 2.0)
 	if ph < 0 {
 		ph = 0
 	}

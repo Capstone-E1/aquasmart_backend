@@ -44,7 +44,7 @@ func ConvertVoltageToPh(voltage float64) float64 {
 	if voltage > 3.3 {
 		voltage = 3.3
 	}
-	return (voltage / 3.3) * 14.0
+	return ((voltage / 3.3) * 14.0) - 2.0
 }
 
 // SensorData represents the raw JSON structure received from the device
